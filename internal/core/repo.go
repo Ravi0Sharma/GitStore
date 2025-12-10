@@ -22,5 +22,6 @@ func (r *Repo) Commit(message string) *Commit {
 	return &Commit{
 		ID:      r.LastCommitID,
 		Message: message,
+		Parent:  r.HEAD,
 	}
 }
