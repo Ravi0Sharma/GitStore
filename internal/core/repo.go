@@ -1,18 +1,29 @@
 package core
 
+import "fmt"
+
 // Repo represents a repository
 type Repo struct {
 	Name         string
 	LastCommitID int
-	HEAD         *Commit
+	HEAD         *Branch
+	Branches     map[string]*Branch
 }
 
 // NewRepo is a constructor function for creating a repository
 func NewRepo(name string) *Repo {
+	master := &Branch{
+		Name: name,
+		Head: nil,
+	}
+
 	return &Repo{
 		Name:         name,
 		LastCommitID: -1, // Start before first commit
 		HEAD:         nil,
+		Branches: map[string]*Branch{
+			"master": master,
+		},
 	}
 }
 
@@ -23,9 +34,19 @@ func (repo *Repo) Commit(message string) *Commit {
 	commit := &Commit{
 		ID:      repo.LastCommitID,
 		Message: message,
-		Parent:  repo.HEAD, // link to previous commit
+		Parent:  repo.HEAD.Head,
 	}
 	// Update HEAD to point to the latest commit
-	repo.HEAD = commit
+	repo.HEAD.Head = commit
 	return commit
+}
+
+// Checkout changes HEAD to the specified branch (Creates if it does not exist)
+func (repo *Repo) Checkout(branchName string) {
+	//if branch exist, change
+	if branch, ok := repo.Branches[branchName]; ok {
+		repo.HEAD = branch
+		fmt.Println("Switched to existing branch:", branchName)
+		return
+	}
 }
