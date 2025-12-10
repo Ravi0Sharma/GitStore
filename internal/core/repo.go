@@ -4,7 +4,7 @@ package core
 type Repo struct {
 	Name         string
 	LastCommitID int
-	HEAD         *Commit
+	HEAD         *Branch
 	Branches     map[string]*Branch
 }
 
@@ -32,9 +32,9 @@ func (repo *Repo) Commit(message string) *Commit {
 	commit := &Commit{
 		ID:      repo.LastCommitID,
 		Message: message,
-		Parent:  repo.HEAD,
+		Parent:  repo.HEAD.Head,
 	}
 	// Update HEAD to point to the latest commit
-	repo.HEAD = commit
+	repo.HEAD.Head = commit
 	return commit
 }
