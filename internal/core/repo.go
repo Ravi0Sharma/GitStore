@@ -19,9 +19,13 @@ func NewRepo(name string) *Repo {
 // Commit creates a new commit with an auto-incrementing ID.
 func (r *Repo) Commit(message string) *Commit {
 	r.LastCommitID++
-	return &Commit{
+
+	commit := &Commit{
 		ID:      r.LastCommitID,
 		Message: message,
-		Parent:  r.HEAD,
+		Parent:  r.HEAD, // link to previous commit
 	}
+	// Update HEAD to point to the latest commit
+	r.HEAD = commit
+	return commit
 }
