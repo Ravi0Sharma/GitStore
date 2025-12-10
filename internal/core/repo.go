@@ -4,6 +4,7 @@ package core
 type Repo struct {
 	Name         string
 	LastCommitID int
+	HEAD         *Commit
 }
 
 // NewRepo is a constructor function for creating a repository
@@ -11,6 +12,7 @@ func NewRepo(name string) *Repo {
 	return &Repo{
 		Name:         name,
 		LastCommitID: -1, // Start before first commit
+		HEAD:         nil,
 	}
 }
 
