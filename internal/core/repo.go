@@ -5,6 +5,7 @@ type Repo struct {
 	Name         string
 	LastCommitID int
 	HEAD         *Commit
+	Branches     map[string]*Branch
 }
 
 // NewRepo is a constructor function for creating a repository
@@ -23,7 +24,7 @@ func (repo *Repo) Commit(message string) *Commit {
 	commit := &Commit{
 		ID:      repo.LastCommitID,
 		Message: message,
-		Parent:  repo.HEAD, // link to previous commit
+		Parent:  repo.HEAD,
 	}
 	// Update HEAD to point to the latest commit
 	repo.HEAD = commit
