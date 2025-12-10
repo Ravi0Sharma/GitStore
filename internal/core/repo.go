@@ -1,5 +1,7 @@
 package core
 
+import "fmt"
+
 // Repo represents a repository
 type Repo struct {
 	Name         string
@@ -37,4 +39,14 @@ func (repo *Repo) Commit(message string) *Commit {
 	// Update HEAD to point to the latest commit
 	repo.HEAD.Head = commit
 	return commit
+}
+
+// Checkout changes HEAD to the specified branch (Creates if it does not exist)
+func (repo *Repo) Checkout(branchName string) {
+	//if branch exist, change
+	if branch, ok := repo.Branches[branchName]; ok {
+		repo.HEAD = branch
+		fmt.Println("Switched to existing branch:", branchName)
+		return
+	}
 }
