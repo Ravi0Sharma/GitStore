@@ -49,4 +49,11 @@ func (repo *Repo) Checkout(branchName string) {
 		fmt.Println("Switched to existing branch:", branchName)
 		return
 	}
+	//Create Branch that points on current commit
+	newBranch := &Branch{
+		Name: branchName,
+		Head: repo.HEAD.Head,
+	}
+	repo.Branches[branchName] = newBranch
+	fmt.Println("Switched to new branch:", branchName)
 }
