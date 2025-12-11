@@ -61,6 +61,7 @@ func InitRepo(root string, options InitOptions) error {
 	return WriteFilesFromTree(root, tree)
 }
 
+// WriteFilesFromTree writes a nested file/directory structure to disk.
 func WriteFilesFromTree(root string, tree map[string]any) error {
 	for name, val := range tree {
 		path := filepath.Join(root, name)
