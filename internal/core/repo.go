@@ -20,7 +20,7 @@ func NewRepo(name string) *Repo {
 	return &Repo{
 		Name:         name,
 		LastCommitID: -1, // Start before first commit
-		HEAD:         nil,
+		HEAD:         master,
 		Branches: map[string]*Branch{
 			"master": master,
 		},
