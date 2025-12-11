@@ -59,5 +59,32 @@ func InitRepo(root string, options InitOptions) error {
 	}
 	// Write the structure to disk
 	return WriteFilesFromTree(root, tree)
+}
 
+func WriteFilesFromTree(root string, tree map[string]any) error {
+	for name, val := range tree {
+		path := filepath.Join(root, name)
+
+		switch v := val.(type) {
+
+		case string:
+			// Leaf file with string contents
+			if err := os.WriteFile(path, []byte(v), 0644); err != nil {
+				return err
+			}
+
+		case map[string]any:
+			// Directory: create dir and recurse
+			if err := os.MkdirAll(path, 0755); err != nil {
+				return err
+			}
+			if err := WriteFilesFromTree(path, v); err != nil {
+				return err
+			}
+
+		default:
+			return fmt.Errorf("unsupported node type for %s", path)
+		}
+	}
+	return nil
 }
