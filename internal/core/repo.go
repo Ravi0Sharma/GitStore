@@ -55,5 +55,6 @@ func (repo *Repo) Checkout(branchName string) {
 		Head: repo.HEAD.Head,
 	}
 	repo.Branches[branchName] = newBranch
+	repo.HEAD = newBranch
 	fmt.Println("Switched to new branch:", branchName)
 }
