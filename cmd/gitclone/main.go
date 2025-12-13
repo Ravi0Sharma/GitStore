@@ -36,8 +36,9 @@ func printHelp() {
 	fmt.Println("gitclone - mini git implementation")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  gitclone init [--bare]   Initialize a new repository")
-	fmt.Println("  gitclone demo            Run in-memory demo of commits/branches")
+	fmt.Println("  gitclone init [--bare]        Initialize a new repository")
+	fmt.Println("  gitclone checkout <branch>    Switch branch (updates .gitclone/HEAD)")
+	fmt.Println("  gitclone demo                 Run in-memory demo of commits/branches")
 }
 
 func main() {
@@ -52,6 +53,9 @@ func main() {
 	switch cmd {
 	case "init":
 		commands.Init(args)
+
+	case "checkout":
+		commands.Checkout(args)
 
 	case "demo":
 		runDemo()
