@@ -44,7 +44,9 @@ func InitRepo(root string, options InitOptions) error {
 		"config":  "[core]\n\tbare = " + strconv.FormatBool(options.Bare) + "\n",
 		"objects": map[string]any{},
 		"refs": map[string]any{
-			"heads": map[string]any{},
+			"heads": map[string]any{
+				"master": "",
+			},
 		},
 	}
 	var tree map[string]any
