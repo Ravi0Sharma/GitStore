@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// repoRoot returns the directory that contains HEAD.
-// For non-bare repos it's: <root>/.gitclone
-// For bare repos it's: <root>
 func repoRoot(root string, opts InitOptions) string {
 	if opts.Bare {
 		return root
@@ -17,51 +14,55 @@ func repoRoot(root string, opts InitOptions) string {
 	return filepath.Join(root, RepoDir)
 }
 
-func headPath(root string, opts InitOptions) string {
+func headFile(root string, opts InitOptions) string {
 	return filepath.Join(repoRoot(root, opts), "HEAD")
 }
 
-// WriteHEADBranch persists the current branch into HEAD.
-// Example content: "ref: refs/heads/master\n"
-func WriteHEADBranch(root string, opts InitOptions, branch string) error {
+func branchRefFile(root string, opts InitOptions, branch string) string {
+	return filepath.Join(repoRoot(root, opts), "refs", "heads", branch)
+}
+
+// Validate branch name (minimal rules for now)
+func validateBranch(branch string) error {
 	if branch == "" {
 		return fmt.Errorf("branch name cannot be empty")
 	}
-	// Minimal validation (keep it simple for now)
 	if strings.ContainsAny(branch, " \t\n") {
 		return fmt.Errorf("invalid branch name: contains whitespace")
 	}
+	if strings.Contains(branch, "..") || strings.Contains(branch, "~") || strings.Contains(branch, "^") || strings.Contains(branch, ":") {
+		return fmt.Errorf("invalid branch name: contains illegal characters")
+	}
+	return nil
+}
 
+// WriteHEADBranch writes: "ref: refs/heads/<branch>\n" into HEAD.
+func WriteHEADBranch(root string, opts InitOptions, branch string) error {
+	if err := validateBranch(branch); err != nil {
+		return err
+	}
 	content := "ref: refs/heads/" + branch + "\n"
-	return os.WriteFile(headPath(root, opts), []byte(content), 0o644)
+	return os.WriteFile(headFile(root, opts), []byte(content), 0o644)
 }
 
-// ReadHEADBranch reads HEAD and returns the current branch name if HEAD is a branch ref.
-func ReadHEADBranch(root string, opts InitOptions) (string, error) {
-	b, err := os.ReadFile(headPath(root, opts))
-	if err != nil {
-		return "", err
-	}
-	return ParseHEAD(string(b))
-}
-
-// ParseHEAD validates HEAD content and extracts the branch name.
-// Expected format: "ref: refs/heads/<branch>\n"
-func ParseHEAD(head string) (string, error) {
-	head = strings.TrimSpace(head)
-
-	const prefix = "ref: refs/heads/"
-	if !strings.HasPrefix(head, prefix) {
-		return "", fmt.Errorf("invalid HEAD format: %q", head)
+// EnsureBranchRefExists creates refs/heads/<branch> if missing.
+func EnsureBranchRefExists(root string, opts InitOptions, branch string) error {
+	if err := validateBranch(branch); err != nil {
+		return err
 	}
 
-	branch := strings.TrimPrefix(head, prefix)
-	if branch == "" {
-		return "", fmt.Errorf("invalid HEAD: missing branch name")
-	}
-	if strings.ContainsAny(branch, " \t\n") {
-		return "", fmt.Errorf("invalid HEAD: branch contains whitespace")
+	refPath := branchRefFile(root, opts, branch)
+
+	// Make sure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(refPath), 0o755); err != nil {
+		return err
 	}
 
-	return branch, nil
+	// If file exists, do nothing
+	if _, err := os.Stat(refPath); err == nil {
+		return nil
+	}
+
+	// Otherwise create empty ref file
+	return os.WriteFile(refPath, []byte(""), 0o644)
 }
