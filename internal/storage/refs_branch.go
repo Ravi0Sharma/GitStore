@@ -60,3 +60,22 @@ func ReadHeadRef(root string, opts InitOptions, branch string) (int, error) {
 	}
 	return n, nil
 }
+
+func ReadHEADBranch(root string, opts InitOptions) (string, error) {
+	b, err := os.ReadFile(headFile(root, opts))
+	if err != nil {
+		return "", err
+	}
+
+	head := strings.TrimSpace(string(b))
+	const prefix = "ref: refs/heads/"
+	if !strings.HasPrefix(head, prefix) {
+		return "", fmt.Errorf("invalid HEAD format: %q", head)
+	}
+
+	branch := strings.TrimPrefix(head, prefix)
+	if err := validateBranch(branch); err != nil {
+		return "", err
+	}
+	return branch, nil
+}
