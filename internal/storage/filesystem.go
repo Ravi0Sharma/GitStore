@@ -40,9 +40,10 @@ func InitRepo(root string, options InitOptions) error {
 
 	// Build a Git structure directory layout
 	gitcloneStructure := map[string]any{
-		"HEAD":    "ref: refs/heads/master\n",
-		"config":  "[core]\n\tbare = " + strconv.FormatBool(options.Bare) + "\n",
-		"objects": map[string]any{},
+		"HEAD":           "ref: refs/heads/master\n",
+		"config":         "[core]\n\tbare = " + strconv.FormatBool(options.Bare) + "\n",
+		"NEXT_COMMIT_ID": "0\n",
+		"objects":        map[string]any{},
 		"refs": map[string]any{
 			"heads": map[string]any{
 				"master": "",
