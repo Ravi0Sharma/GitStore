@@ -24,3 +24,23 @@ func commitObjectPath(root string, options InitOptions, id int) string {
 	}
 	return filepath.Join(base, "objects", fmt.Sprintf("%d.json", id))
 }
+
+// WriteCommitObject serializes a commit as JSON and writes it to disk.
+
+func WriteCommitObject(root string, opts InitOptions, c Commit) error {
+	path := commitObjectPath(root, opts, c.ID)
+
+	// Ensure objects/ directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+
+	// Encode commit as JSON
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	// Write commit file
+	return os.WriteFile(path, data, 0644)
+}
