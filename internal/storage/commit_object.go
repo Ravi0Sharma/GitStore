@@ -44,3 +44,22 @@ func WriteCommitObject(root string, opts InitOptions, c Commit) error {
 	// Write commit file
 	return os.WriteFile(path, data, 0644)
 }
+
+// ReadCommitObject loads and deserializes a commit from disk.
+func ReadCommitObject(root string, opts InitOptions, id int) (Commit, error) {
+	path := commitObjectPath(root, opts, id)
+
+	// Read commit file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Commit{}, err
+	}
+
+	// Decode JSON into Commit struct
+	var c Commit
+	if err := json.Unmarshal(data, &c); err != nil {
+		return Commit{}, err
+	}
+
+	return c, nil
+}
