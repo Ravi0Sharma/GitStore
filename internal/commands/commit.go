@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gitclone/internal/storage"
 )
@@ -33,12 +34,36 @@ func Commit(args []string) {
 		return
 	}
 
+	// Read current branch tip to determine parent commit
+	parentPtr, err := storage.ReadHeadRefMaybe(cwd, options, branch)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Allocate new commit ID
 	id, err := storage.NextCommitID(cwd, options)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
 
+	// Create commit object
+	commit := storage.Commit{
+		ID:        id,
+		Message:   msg,
+		Branch:    branch,
+		Timestamp: time.Now().Unix(),
+		Parent:    parentPtr,
+	}
+
+	// Write commit object to disk
+	if err := storage.WriteCommitObject(cwd, options, commit); err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Update branch ref to point to new commit
 	if err := storage.WriteHeadRef(cwd, options, branch, id); err != nil {
 		fmt.Println("Error:", err)
 		return

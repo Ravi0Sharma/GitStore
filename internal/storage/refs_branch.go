@@ -61,6 +61,28 @@ func ReadHeadRef(root string, opts InitOptions, branch string) (int, error) {
 	return n, nil
 }
 
+// ReadHeadRefMaybe reads commit ID from refs/heads/<branch>.
+// Returns nil if branch has no commits (empty ref file).
+func ReadHeadRefMaybe(root string, opts InitOptions, branch string) (*int, error) {
+	p := refHeadPath(root, opts, branch)
+	b, err := os.ReadFile(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	s := strings.TrimSpace(string(b))
+	if s == "" {
+		return nil, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return nil, fmt.Errorf("invalid commit id in branch ref: %q", s)
+	}
+	return &n, nil
+}
+
 func ReadHEADBranch(root string, opts InitOptions) (string, error) {
 	b, err := os.ReadFile(headFile(root, opts))
 	if err != nil {
