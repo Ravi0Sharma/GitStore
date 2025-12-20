@@ -99,6 +99,9 @@ func diskLog() {
 		if c.Parent != nil {
 			fmt.Printf("parent %d\n", *c.Parent)
 		}
+		if c.Parent2 != nil {
+			fmt.Printf("parent2 %d\n", *c.Parent2)
+		}
 		fmt.Printf("branch %s\n", c.Branch)
 		fmt.Printf("message %s\n", c.Message)
 		fmt.Println()
@@ -143,6 +146,9 @@ func diskShow(args []string) {
 	if c.Parent != nil {
 		fmt.Printf("parent %d\n", *c.Parent)
 	}
+	if c.Parent2 != nil {
+		fmt.Printf("parent2 %d\n", *c.Parent2)
+	}
 	fmt.Printf("branch %s\n", c.Branch)
 	fmt.Printf("message %s\n", c.Message)
 }
@@ -154,6 +160,7 @@ func printHelp() {
 	fmt.Println("  gitclone init [--bare]          Initialize a new repository")
 	fmt.Println("  gitclone checkout <branch>      Switch branch (updates .gitclone/HEAD)")
 	fmt.Println("  gitclone commit -m <msg>        Create a commit (writes objects/<id>.json + updates refs/heads/<branch>)")
+	fmt.Println("  gitclone merge <branch>         Merge branch into current branch (graph-only merge)")
 	fmt.Println("  gitclone log                    Show commit history from disk (follows parent chain)")
 	fmt.Println("  gitclone show <id>              Show a single commit object from disk")
 	fmt.Println("  gitclone demo                   Run in-memory demo of commits/branches")
@@ -178,6 +185,9 @@ func main() {
 
 	case "commit":
 		commands.Commit(args)
+
+	case "merge":
+		commands.Merge(args)
 
 	case "log":
 		diskLog()
