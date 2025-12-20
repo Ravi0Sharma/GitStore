@@ -45,7 +45,7 @@ func Merge(args []string) {
 		return
 	}
 
-	// Read commits of both branches
+	// Read latest commit of both branches
 	currentTip, err := storage.ReadHeadRefMaybe(cwd, writeOptions, currentBranch)
 	if err != nil {
 		fmt.Println("Error:", err)
