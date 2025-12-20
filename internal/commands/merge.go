@@ -57,7 +57,7 @@ func Merge(args []string) {
 		return
 	}
 
-	// If other branch has no commits, nothing to merge
+	// If other branch has no commit, nothing to merge
 	if otherTip == nil {
 		fmt.Printf("Nothing to merge: branch %s has no commits\n", otherBranch)
 		return
