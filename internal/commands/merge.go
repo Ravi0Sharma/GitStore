@@ -2,10 +2,9 @@ package commands
 
 import (
 	"fmt"
+	"gitclone/internal/storage"
 	"os"
 	"time"
-
-	"gitclone/internal/storage"
 )
 
 func Merge(args []string) {
@@ -46,7 +45,7 @@ func Merge(args []string) {
 		return
 	}
 
-	// Read tips of both branches
+	// Read commits of both branches
 	currentTip, err := storage.ReadHeadRefMaybe(cwd, writeOptions, currentBranch)
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -105,4 +104,3 @@ func Merge(args []string) {
 
 	fmt.Printf("[%s %d] %s\n", currentBranch, mergeID, mergeMessage)
 }
-
