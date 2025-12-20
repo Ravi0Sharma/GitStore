@@ -14,6 +14,7 @@ type Commit struct {
 	Branch    string `json:"branch"`
 	Timestamp int64  `json:"timestamp"`
 	Parent    *int   `json:"parent,omitempty"`
+	Parent2   *int   `json:"parent2,omitempty"`
 }
 
 // CommitObjectPath returns the path to a commit object file.
