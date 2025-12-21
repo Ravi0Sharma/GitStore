@@ -3,8 +3,6 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 )
 
 // Commit represents a single commit stored on disk.
@@ -17,23 +15,13 @@ type Commit struct {
 	Parent2   *int   `json:"parent2,omitempty"`
 }
 
-// CommitObjectPath returns the path to a commit object file.
-func commitObjectPath(root string, options InitOptions, id int) string {
-	base := root
-	if !options.Bare {
-		base = filepath.Join(root, RepoDir)
-	}
-	return filepath.Join(base, "objects", fmt.Sprintf("%d.json", id))
-}
-
-// WriteCommitObject serializes a commit as JSON and writes it to disk.
+// WriteCommitObject serializes a commit as JSON and writes it to the database.
 func WriteCommitObject(root string, options InitOptions, commit Commit) error {
-	path := commitObjectPath(root, options, commit.ID)
-
-	// Ensure objects/ directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	db, err := openDB(root, options)
+	if err != nil {
 		return err
 	}
+	defer db.Close()
 
 	// Encode commit as JSON
 	data, err := json.MarshalIndent(commit, "", "  ")
@@ -41,16 +29,22 @@ func WriteCommitObject(root string, options InitOptions, commit Commit) error {
 		return err
 	}
 
-	// Write commit file
-	return os.WriteFile(path, data, 0644)
+	// Write commit to DB with key "objects/<id>"
+	key := fmt.Sprintf("objects/%d", commit.ID)
+	return db.Put(key, data)
 }
 
-// ReadCommitObject loads and deserializes a commit from disk.
+// ReadCommitObject loads and deserializes a commit from the database.
 func ReadCommitObject(root string, opts InitOptions, id int) (Commit, error) {
-	path := commitObjectPath(root, opts, id)
+	db, err := openDB(root, opts)
+	if err != nil {
+		return Commit{}, err
+	}
+	defer db.Close()
 
-	// Read commit file
-	data, err := os.ReadFile(path)
+	// Read commit from DB
+	key := fmt.Sprintf("objects/%d", id)
+	data, err := db.Get(key)
 	if err != nil {
 		return Commit{}, err
 	}

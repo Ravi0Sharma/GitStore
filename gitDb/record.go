@@ -15,7 +15,7 @@ func (record Record) Encode() ([]byte, error) {
 	if record.Key == "" {
 		return nil, fmt.Errorf("empty key")
 	}
-	keyBytes := []byte(r.Key)
+	keyBytes := []byte(record.Key)
 	keyLen := uint32(len(keyBytes))
 	valLen := uint32(len(record.Value))
 

@@ -38,17 +38,10 @@ func InitRepo(root string, options InitOptions) error {
 		return fmt.Errorf("repository already initialized")
 	}
 
-	// Build a Git structure directory layout
+	// Create directory structure (config file and objects directory still needed)
 	gitcloneStructure := map[string]any{
-		"HEAD":           "ref: refs/heads/master\n",
-		"config":         "[core]\n\tbare = " + strconv.FormatBool(options.Bare) + "\n",
-		"NEXT_COMMIT_ID": "0\n",
-		"objects":        map[string]any{},
-		"refs": map[string]any{
-			"heads": map[string]any{
-				"master": "",
-			},
-		},
+		"config":  "[core]\n\tbare = " + strconv.FormatBool(options.Bare) + "\n",
+		"objects": map[string]any{},
 	}
 	var tree map[string]any
 	if options.Bare {
@@ -61,7 +54,33 @@ func InitRepo(root string, options InitOptions) error {
 		}
 	}
 	// Write the structure to disk
-	return WriteFilesFromTree(root, tree)
+	if err := WriteFilesFromTree(root, tree); err != nil {
+		return err
+	}
+
+	// Initialize DB with metadata keys
+	db, err := openDB(root, options)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Initialize HEAD
+	if err := db.Put("meta/HEAD", []byte("ref: refs/heads/master\n")); err != nil {
+		return fmt.Errorf("failed to initialize HEAD: %w", err)
+	}
+
+	// Initialize NEXT_COMMIT_ID
+	if err := db.Put("meta/NEXT_COMMIT_ID", []byte("0\n")); err != nil {
+		return fmt.Errorf("failed to initialize NEXT_COMMIT_ID: %w", err)
+	}
+
+	// Initialize master branch ref (empty for new branch)
+	if err := db.Put("refs/heads/master", []byte("")); err != nil {
+		return fmt.Errorf("failed to initialize master ref: %w", err)
+	}
+
+	return nil
 }
 
 // WriteFilesFromTree writes a nested file/directory structure to disk.

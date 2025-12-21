@@ -33,3 +33,16 @@ func (db *DB) Put(key string, value []byte) error {
 	db.index.Set(key, offset)
 	return nil
 }
+
+// Get retrieves a value by key from the database
+func (db *DB) Get(key string) ([]byte, error) {
+	offset, ok := db.index.Get(key)
+	if !ok {
+		return nil, fmt.Errorf("key not found: %s", key)
+	}
+	record, _, err := DecodeRecord(db.log, offset)
+	if err != nil {
+		return nil, err
+	}
+	return record.Value, nil
+}
