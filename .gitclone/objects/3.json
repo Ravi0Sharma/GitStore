@@ -1,8 +1,0 @@
-{
-  "id": 3,
-  "message": "Merge branch testing into master",
-  "branch": "master",
-  "timestamp": 1766236775,
-  "parent": 1,
-  "parent2": 2
-}
