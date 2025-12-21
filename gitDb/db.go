@@ -1,23 +1,61 @@
 package GitDb
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
 
 type DB struct {
-	log   []byte
-	index *Index
+	log     []byte
+	index   *Index
+	logPath string
 }
 
 // Open initializes a new database instance
-func Open(_ string) (*DB, error) {
-	return &DB{
-		log:   make([]byte, 0, 4096),
-		index: newIndex(),
-	}, nil
+func Open(path string) (*DB, error) {
+	logPath := filepath.Join(path, "log")
+	db := &DB{
+		log:     make([]byte, 0, 4096),
+		index:   newIndex(),
+		logPath: logPath,
+	}
+
+	// Load existing log file if it exists
+	if data, err := os.ReadFile(logPath); err == nil {
+		db.log = data
+		// Rebuild index from log
+		if err := db.rebuildIndex(); err != nil {
+			return nil, fmt.Errorf("failed to rebuild index: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to read log file: %w", err)
+	}
+
+	return db, nil
 }
 
-// Close shuts down the database (nothing to close in memory).
-func (db *DB) Close() error {
+// rebuildIndex reconstructs the index by reading all records from the log
+func (db *DB) rebuildIndex() error {
+	offset := int64(0)
+	for offset < int64(len(db.log)) {
+		record, size, err := DecodeRecord(db.log, offset)
+		if err != nil {
+			return err
+		}
+		// Update index with latest offset for this key
+		db.index.Set(record.Key, offset)
+		offset += size
+	}
 	return nil
+}
+
+// Close shuts down the database
+func (db *DB) Close() error {
+	if err := os.MkdirAll(filepath.Dir(db.logPath), 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+	return os.WriteFile(db.logPath, db.log, 0644)
 }
 
 // Append record to the log and update the index
@@ -31,6 +69,19 @@ func (db *DB) Put(key string, value []byte) error {
 	offset := int64(len(db.log))
 	db.log = append(db.log, encoded...)
 	db.index.Set(key, offset)
+
+	// Append to log file for persistence
+	if err := os.MkdirAll(filepath.Dir(db.logPath), 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+	file, err := os.OpenFile(db.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer file.Close()
+	if _, err := file.Write(encoded); err != nil {
+		return fmt.Errorf("failed to write to log file: %w", err)
+	}
 	return nil
 }
 
@@ -45,4 +96,21 @@ func (db *DB) Get(key string) ([]byte, error) {
 		return nil, err
 	}
 	return record.Value, nil
+}
+
+// Scan iterates through all records in the log, calling fn for each record.
+// Stops early if fn returns an error.
+func (db *DB) Scan(fn func(Record) error) error {
+	offset := int64(0)
+	for offset < int64(len(db.log)) {
+		record, bytesConsumed, err := DecodeRecord(db.log, offset)
+		if err != nil {
+			return err
+		}
+		if err := fn(record); err != nil {
+			return err
+		}
+		offset += bytesConsumed
+	}
+	return nil
 }

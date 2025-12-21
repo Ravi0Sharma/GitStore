@@ -27,4 +27,3 @@ func openDB(root string, options InitOptions) (*GitDb.DB, error) {
 	}
 	return db, nil
 }
-
