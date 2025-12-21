@@ -17,23 +17,6 @@ func printLog(label string, commits []*core.Commit) {
 	}
 }
 
-func runDemo() {
-	repo := core.NewRepo("test")
-
-	repo.Commit("Initial commit")
-	repo.Commit("Change 1")
-
-	printLog("master log", repo.Log()) // 1, 0
-
-	repo.Checkout("testing")
-	repo.Commit("Change 2 on testing")
-
-	printLog("testing log", repo.Log()) // 2,1,0
-
-	repo.Checkout("master")
-	printLog("master log again", repo.Log()) // 1,0
-}
-
 // demoDisk runs a small scenario that exercises disk persistence:
 // init -> commit -> checkout -> commit, then prints HEAD + branch pointers.
 func demoDisk() {
@@ -163,7 +146,6 @@ func printHelp() {
 	fmt.Println("  gitclone merge <branch>         Merge branch into current branch (graph-only merge)")
 	fmt.Println("  gitclone log                    Show commit history from disk (follows parent chain)")
 	fmt.Println("  gitclone show <id>              Show a single commit object from disk")
-	fmt.Println("  gitclone demo                   Run in-memory demo of commits/branches")
 	fmt.Println("  gitclone demo-disk              Run disk demo (init/checkout/commit)")
 }
 
@@ -194,9 +176,6 @@ func main() {
 
 	case "show":
 		diskShow(args)
-
-	case "demo":
-		runDemo()
 
 	case "demo-disk":
 		demoDisk()
