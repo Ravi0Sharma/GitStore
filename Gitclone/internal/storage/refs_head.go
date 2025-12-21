@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -12,14 +11,6 @@ func repoRoot(root string, opts InitOptions) string {
 		return root
 	}
 	return filepath.Join(root, RepoDir)
-}
-
-func headFile(root string, opts InitOptions) string {
-	return filepath.Join(repoRoot(root, opts), "HEAD")
-}
-
-func branchRefFile(root string, opts InitOptions, branch string) string {
-	return filepath.Join(repoRoot(root, opts), "refs", "heads", branch)
 }
 
 // Validate branch name (minimal rules for now)
@@ -41,8 +32,14 @@ func WriteHEADBranch(root string, opts InitOptions, branch string) error {
 	if err := validateBranch(branch); err != nil {
 		return err
 	}
+	db, err := openDB(root, opts)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
 	content := "ref: refs/heads/" + branch + "\n"
-	return os.WriteFile(headFile(root, opts), []byte(content), 0o644)
+	return db.Put("meta/HEAD", []byte(content))
 }
 
 // EnsureBranchRefExists creates refs/heads/<branch> if missing.
@@ -51,18 +48,20 @@ func EnsureBranchRefExists(root string, opts InitOptions, branch string) error {
 		return err
 	}
 
-	refPath := branchRefFile(root, opts, branch)
-
-	// Make sure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(refPath), 0o755); err != nil {
+	db, err := openDB(root, opts)
+	if err != nil {
 		return err
 	}
+	defer db.Close()
 
-	// If file exists, do nothing
-	if _, err := os.Stat(refPath); err == nil {
+	key := "refs/heads/" + branch
+	// Check if key exists
+	_, err = db.Get(key)
+	if err == nil {
+		// Key exists, do nothing
 		return nil
 	}
 
-	// Otherwise create empty ref file
-	return os.WriteFile(refPath, []byte(""), 0o644)
+	// Key doesn't exist, create empty ref
+	return db.Put(key, []byte(""))
 }
