@@ -14,3 +14,22 @@ func Open(_ string) (*DB, error) {
 		index: newIndex(),
 	}, nil
 }
+
+// Close shuts down the database (nothing to close in memory).
+func (db *DB) Close() error {
+	return nil
+}
+
+// Append record to the log and update the index
+func (db *DB) Put(key string, value []byte) error {
+	record := Record{Key: key, Value: value}
+	encoded, err := record.Encode()
+	if err != nil {
+		return err
+	}
+
+	offset := int64(len(db.log))
+	db.log = append(db.log, encoded...)
+	db.index.Set(key, offset)
+	return nil
+}
