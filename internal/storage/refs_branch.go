@@ -63,8 +63,8 @@ func ReadHeadRef(root string, opts InitOptions, branch string) (int, error) {
 
 // ReadHeadRefMaybe reads commit ID from refs/heads/<branch>.
 // Returns nil if branch has no commits (empty ref file).
-func ReadHeadRefMaybe(root string, opts InitOptions, branch string) (*int, error) {
-	p := refHeadPath(root, opts, branch)
+func ReadHeadRefMaybe(root string, options InitOptions, branch string) (*int, error) {
+	p := refHeadPath(root, options, branch)
 	b, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {

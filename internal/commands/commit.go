@@ -10,6 +10,8 @@ import (
 
 func Commit(args []string) {
 	msg := ""
+
+	//Check for message tag
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-m" && i+1 < len(args) {
 			msg = args[i+1]
@@ -26,7 +28,7 @@ func Commit(args []string) {
 		return
 	}
 
-	options := storage.InitOptions{Bare: false} // keep simple for now
+	options := storage.InitOptions{Bare: false}
 
 	branch, err := storage.ReadHEADBranch(cwd, options)
 	if err != nil {
