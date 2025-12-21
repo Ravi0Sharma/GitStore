@@ -2,16 +2,19 @@ package storage
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
 
 func NextCommitID(root string, options InitOptions) (int, error) {
-	p := filepath.Join(repoRoot(root, options), "NEXT_COMMIT_ID")
+	db, err := openDB(root, options)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
 
-	b, err := os.ReadFile(p)
+	// Read current value
+	b, err := db.Get("meta/NEXT_COMMIT_ID")
 	if err != nil {
 		return 0, err
 	}
@@ -22,7 +25,9 @@ func NextCommitID(root string, options InitOptions) (int, error) {
 		return 0, fmt.Errorf("invalid NEXT_COMMIT_ID: %q", curStr)
 	}
 
-	if err := os.WriteFile(p, []byte(fmt.Sprintf("%d\n", cur+1)), 0o644); err != nil {
+	// Write incremented value
+	// Note: This is not atomic - if concurrent access is needed, external locking or transactions would be required
+	if err := db.Put("meta/NEXT_COMMIT_ID", []byte(fmt.Sprintf("%d\n", cur+1))); err != nil {
 		return 0, err
 	}
 

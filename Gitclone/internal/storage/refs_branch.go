@@ -2,15 +2,9 @@ package storage
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
-
-func refHeadPath(root string, opts InitOptions, branch string) string {
-	return filepath.Join(repoRoot(root, opts), "refs", "heads", branch)
-}
 
 // EnsureHeadRefExists creates refs/heads/<branch> if missing.
 func EnsureHeadRefExists(root string, opts InitOptions, branch string) error {
@@ -18,20 +12,22 @@ func EnsureHeadRefExists(root string, opts InitOptions, branch string) error {
 		return fmt.Errorf("invalid branch name")
 	}
 
-	p := refHeadPath(root, opts, branch)
-
-	// Ensure refs/heads directory exists
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	db, err := openDB(root, opts)
+	if err != nil {
 		return err
 	}
+	defer db.Close()
 
-	// If file exists, do nothing
-	if _, err := os.Stat(p); err == nil {
+	key := "refs/heads/" + branch
+	// Check if key exists
+	_, err = db.Get(key)
+	if err == nil {
+		// Key exists, do nothing
 		return nil
 	}
 
-	// Create empty ref file
-	return os.WriteFile(p, []byte(""), 0o644)
+	// Key doesn't exist, create empty ref
+	return db.Put(key, []byte(""))
 }
 
 // WriteHeadRef writes commit ID into refs/heads/<branch>
@@ -39,14 +35,26 @@ func WriteHeadRef(root string, opts InitOptions, branch string, commitID int) er
 	if err := EnsureHeadRefExists(root, opts, branch); err != nil {
 		return err
 	}
-	p := refHeadPath(root, opts, branch)
-	return os.WriteFile(p, []byte(fmt.Sprintf("%d\n", commitID)), 0o644)
+	db, err := openDB(root, opts)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	key := "refs/heads/" + branch
+	return db.Put(key, []byte(fmt.Sprintf("%d\n", commitID)))
 }
 
 // ReadHeadRef reads commit ID from refs/heads/<branch>
 func ReadHeadRef(root string, opts InitOptions, branch string) (int, error) {
-	p := refHeadPath(root, opts, branch)
-	b, err := os.ReadFile(p)
+	db, err := openDB(root, opts)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+
+	key := "refs/heads/" + branch
+	b, err := db.Get(key)
 	if err != nil {
 		return 0, err
 	}
@@ -64,13 +72,18 @@ func ReadHeadRef(root string, opts InitOptions, branch string) (int, error) {
 // ReadHeadRefMaybe reads commit ID from refs/heads/<branch>.
 // Returns nil if branch has no commits (empty ref file).
 func ReadHeadRefMaybe(root string, options InitOptions, branch string) (*int, error) {
-	p := refHeadPath(root, options, branch)
-	b, err := os.ReadFile(p)
+	db, err := openDB(root, options)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
 		return nil, err
+	}
+	defer db.Close()
+
+	key := "refs/heads/" + branch
+	b, err := db.Get(key)
+	if err != nil {
+		// Note: Assuming key not found means branch doesn't exist (returns nil)
+		// GitDb.Get returns error for missing keys, which we treat as nil
+		return nil, nil
 	}
 	s := strings.TrimSpace(string(b))
 	if s == "" {
@@ -84,7 +97,13 @@ func ReadHeadRefMaybe(root string, options InitOptions, branch string) (*int, er
 }
 
 func ReadHEADBranch(root string, opts InitOptions) (string, error) {
-	b, err := os.ReadFile(headFile(root, opts))
+	db, err := openDB(root, opts)
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+
+	b, err := db.Get("meta/HEAD")
 	if err != nil {
 		return "", err
 	}
