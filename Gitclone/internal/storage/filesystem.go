@@ -33,7 +33,6 @@ func InRepo(root string, options InitOptions) bool {
 
 // InitRepo initializes the current directory as a new repository.
 func InitRepo(root string, options InitOptions) error {
-	// Abort if already a repository
 	if InRepo(root, options) {
 		return fmt.Errorf("repository already initialized")
 	}
@@ -45,10 +44,10 @@ func InitRepo(root string, options InitOptions) error {
 	}
 	var tree map[string]any
 	if options.Bare {
-		// bare repo: write structure into the top level
+		//write structure into the top level
 		tree = gitcloneStructure
 	} else {
-		// non-bare repo: nest everything under .gitclone/
+		// nest everything under .gitclone/
 		tree = map[string]any{
 			RepoDir: gitcloneStructure,
 		}

@@ -62,6 +62,6 @@ func EnsureBranchRefExists(root string, opts InitOptions, branch string) error {
 		return nil
 	}
 
-	// Key doesn't exist, create empty ref
+	//create empty ref
 	return db.Put(key, []byte(""))
 }
