@@ -99,7 +99,6 @@ func (db *DB) Get(key string) ([]byte, error) {
 }
 
 // Scan iterates through all records in the log, calling fn for each record.
-// Stops early if fn returns an error.
 func (db *DB) Scan(fn func(Record) error) error {
 	offset := int64(0)
 	for offset < int64(len(db.log)) {
