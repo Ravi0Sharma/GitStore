@@ -26,7 +26,6 @@ func NextCommitID(root string, options InitOptions) (int, error) {
 	}
 
 	// Write incremented value
-	// Note: This is not atomic - if concurrent access is needed, external locking or transactions would be required
 	if err := db.Put("meta/NEXT_COMMIT_ID", []byte(fmt.Sprintf("%d\n", cur+1))); err != nil {
 		return 0, err
 	}
