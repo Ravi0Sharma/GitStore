@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 96%;
+    --card-foreground: 0 0% 12%;
+
+    --popover: 0 0% 96%;
+    --popover-foreground: 0 0% 12%;
+
+    --primary: 15 90% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 350 85% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 15 90% 55%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --gradient-start: 0 0% 3%;
+    --gradient-mid: 350 85% 35%;
+    --gradient-end: 25 95% 50%;
+    
+    --timeline-glow: 350 85% 50%;
+    --timeline-glow-secondary: 25 95% 50%;
+    
+    --card-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.3), 0 0 60px -20px hsla(15, 90%, 55%, 0.2);
+  }
+
+  .dark {
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 96%;
+    --card-foreground: 0 0% 12%;
+    --popover: 0 0% 96%;
+    --popover-foreground: 0 0% 12%;
+    --primary: 15 90% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 350 85% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 15 90% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Outfit', sans-serif;
+  }
+}
+
+@layer utilities {
+  .gradient-bg {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--gradient-start)) 0%,
+      hsl(var(--gradient-mid)) 50%,
+      hsl(var(--gradient-end)) 100%
+    );
+  }
+
+  .timeline-glow {
+    box-shadow: 0 0 20px hsl(var(--timeline-glow) / 0.6),
+                0 0 40px hsl(var(--timeline-glow) / 0.3);
+  }
+
+  .timeline-glow-orange {
+    box-shadow: 0 0 20px hsl(var(--timeline-glow-secondary) / 0.6),
+                0 0 40px hsl(var(--timeline-glow-secondary) / 0.3);
+  }
+
+  .card-glow {
+    box-shadow: var(--card-shadow);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(0 0% 80%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-accent {
+    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--primary)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* Starfield animation */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.star {
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.float-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { 
+    box-shadow: 0 0 20px hsl(var(--timeline-glow) / 0.6),
+                0 0 40px hsl(var(--timeline-glow) / 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 30px hsl(var(--timeline-glow) / 0.8),
+                0 0 60px hsl(var(--timeline-glow) / 0.5);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
