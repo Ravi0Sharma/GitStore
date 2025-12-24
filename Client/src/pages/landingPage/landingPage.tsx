@@ -6,7 +6,7 @@ import IssueManagementSection from "./components/IssueManagementSection";
 import ViewHistorySection from "./components/ViewHistorySection";
 import Starfield from "./components/Starfield";
 
-const LandingPage = () => {
+const landingPage = () => {
   return (
     <div className="min-h-screen gradient-bg relative overflow-x-hidden">
       {/* Starfield Background */}
@@ -50,5 +50,5 @@ const LandingPage = () => {
   );
 };
 
-export default LandingPage;
+export default landingPage;
 
