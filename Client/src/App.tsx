@@ -1,4 +1,4 @@
-import LandingPage from "./pages/landingPage/LandingPage";
+import LandingPage from "./pages/landingPage/landingPage";
 import "./index.css";
 
 function App() {
