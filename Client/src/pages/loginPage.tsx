@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import Navbar from "./landingPage/components/Navbar";
+import Navbar from "../components/Navbar";
 import { Mail, Lock } from "lucide-react";
-import Starfield from "./landingPage/components/Starfield";
+import Starfield from "../components/Starfield";
 
 type FormState = {
   email: string;

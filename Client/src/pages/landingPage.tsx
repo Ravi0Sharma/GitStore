@@ -1,10 +1,10 @@
-import Navbar from "./components/Navbar";
-import HeroSection from "./components/HeroSection";
-import TimelineSection from "./components/TimelineSection";
-import IssuesSection from "./components/IssuesSection";
-import IssueManagementSection from "./components/IssueManagementSection";
-import ViewHistorySection from "./components/ViewHistorySection";
-import Starfield from "./components/Starfield";
+import Navbar from "../components/Navbar";
+import HeroSection from "../components/HeroSection";
+import TimelineSection from "../components/TimelineSection";
+import IssuesSection from "../components/IssuesSection";
+import IssueManagementSection from "../components/IssueManagementSection";
+import ViewHistorySection from "../components/ViewHistorySection";
+import Starfield from "../components/Starfield";
 
 const landingPage = () => {
   return (
