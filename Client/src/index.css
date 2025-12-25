@@ -1,10 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
-/* =========================
-   TAILWIND v4 THEME TOKENS
-   (gör bg-card, border-border etc giltiga)
-   ========================= */
 @theme {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -35,9 +31,6 @@
   --color-ring: hsl(var(--ring));
 }
 
-/* =========================
-   BASE / DESIGN TOKENS
-   ========================= */
 @layer base {
   :root {
     --background: 0 0% 3%;

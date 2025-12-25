@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import { Mail, Lock, User } from "lucide-react";
 import Starfield from "../components/Starfield";
+import { useNavigate } from "react-router-dom"
+import { Link} from "react-router-dom"
+
 
 type FormState = {
   name: string;
@@ -11,6 +14,8 @@ type FormState = {
 };
 
 export default function SignUpPage() {
+    const navigate = useNavigate()
+
   const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
@@ -165,7 +170,7 @@ export default function SignUpPage() {
 
           {/* Sign In Link */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-muted-foreground">
+           <Link to="/SignIn"> <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
               <a
                 href="#"
@@ -174,6 +179,7 @@ export default function SignUpPage() {
                 Sign in
               </a>
             </p>
+            </Link>
           </div>
         </div>
       </div>

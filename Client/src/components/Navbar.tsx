@@ -1,5 +1,6 @@
 import { GitBranch } from "lucide-react";
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link} from "react-router-dom"
+
 
 const Navbar = () => {
   const navigate = useNavigate()
@@ -12,15 +13,17 @@ const Navbar = () => {
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
               <GitBranch className="w-5 h-5 text-primary" />
             </div>
-            <span className="text-xl font-bold text-foreground">GitStore</span>
+            <Link to="/"><span className="text-xl font-bold text-foreground">GitStore</span>
+            </Link>
+            
           </div>
 
           {/* CTA Buttons */}
           <div className="flex items-center gap-4">
-           <button onClick={() => navigate("/signIn")}>
+           <button onClick={() => navigate("/SignIn")}>
               Log in
             </button>
-            <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+            <button  onClick={() => navigate("/SignUp") } className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
               Get Started
             </button>
           </div>

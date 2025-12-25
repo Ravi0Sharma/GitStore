@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import { Mail, Lock } from "lucide-react";
 import Starfield from "../components/Starfield";
+import { Link} from "react-router-dom"
 
 type FormState = {
   email: string;
@@ -163,12 +164,14 @@ export default function LoginPage() {
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-muted-foreground">
+            
+            <Link to="/SignUp"> <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
               <a href="#" className="text-accent hover:text-accent/80 font-medium transition-colors">
                 Sign up
               </a>
             </p>
+            </Link>
           </div>
         </div>
       </div>
