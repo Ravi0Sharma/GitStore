@@ -1,8 +1,12 @@
-import LandingPage from "./pages/landingPage/landingPage";
-import "./index.css";
+import { Routes, Route } from "react-router-dom"
+import LandingPage from "./pages/landingPage/landingPage"
+import LoginPage from "./pages/loginPage"
 
-function App() {
-  return <LandingPage />;
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/SignIn" element={<LoginPage />} />
+    </Routes>
+  )
 }
-
-export default App;
