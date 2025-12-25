@@ -1,6 +1,8 @@
 import { GitBranch } from "lucide-react";
+import { useNavigate } from "react-router-dom"
 
 const Navbar = () => {
+  const navigate = useNavigate()
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
       <div className="container mx-auto px-6 py-4">
@@ -15,8 +17,8 @@ const Navbar = () => {
 
           {/* CTA Buttons */}
           <div className="flex items-center gap-4">
-            <button className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Sign in
+           <button onClick={() => navigate("/signIn")}>
+              Log in
             </button>
             <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
               Get Started
