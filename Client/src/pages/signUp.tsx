@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import { Mail, Lock, User } from "lucide-react";
 import Starfield from "../components/Starfield";
-import { useNavigate } from "react-router-dom"
-import { Link} from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom";
+import { signUp, getFirebaseErrorMessage } from "../firebase";
 
 
 type FormState = {
@@ -14,14 +14,15 @@ type FormState = {
 };
 
 export default function SignUpPage() {
-    const navigate = useNavigate()
-
+  const navigate = useNavigate();
   const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.currentTarget;
@@ -29,12 +30,34 @@ export default function SignUpPage() {
       ...prev,
       [name]: value,
     }));
+    setError(""); // Clear error when user types
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: handle sign up
-    // console.log(form);
+    setError("");
+
+    // Validate passwords match
+    if (form.password !== form.confirmPassword) {
+      setError("Lösenorden matchar inte.");
+      return;
+    }
+
+    // Validate password length
+    if (form.password.length < 6) {
+      setError("Lösenordet måste vara minst 6 tecken långt.");
+      return;
+    }
+
+    setLoading(true);
+    const result = await signUp(form.email, form.password);
+    
+    if (result.error) {
+      setError(getFirebaseErrorMessage(result.error));
+      setLoading(false);
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   const handleGoogleSignUp = () => {
@@ -101,6 +124,13 @@ export default function SignUpPage() {
             </div>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name */}
@@ -162,23 +192,22 @@ export default function SignUpPage() {
             {/* Submit */}
             <button
               type="submit"
-              className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-accent to-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-accent/50"
+              disabled={loading}
+              className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-accent to-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create account
+              {loading ? "Skapar konto..." : "Create account"}
             </button>
           </form>
 
           {/* Sign In Link */}
           <div className="mt-6 text-center">
-           <Link to="/SignIn"> <p className="text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <a
-                href="#"
-                className="text-accent hover:text-accent/80 font-medium transition-colors"
-              >
-                Sign in
-              </a>
-            </p>
+            <Link to="/signin">
+              <p className="text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <span className="text-accent hover:text-accent/80 font-medium transition-colors cursor-pointer">
+                  Sign in
+                </span>
+              </p>
             </Link>
           </div>
         </div>

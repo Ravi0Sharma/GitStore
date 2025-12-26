@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import { Mail, Lock } from "lucide-react";
 import Starfield from "../components/Starfield";
-import { Link} from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom";
+import { signIn, getFirebaseErrorMessage } from "../firebase";
 
 type FormState = {
   email: string;
@@ -11,11 +12,14 @@ type FormState = {
 };
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [form, setForm] = useState<FormState>({ 
     email: "", 
     password: "",
     rememberMe: false
   });
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.currentTarget;
@@ -23,12 +27,22 @@ export default function LoginPage() {
       ...prev, 
       [name]: type === "checkbox" ? checked : value 
     }));
+    setError(""); // Clear error when user types
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // TODO: handle login
-    // console.log(form);
+    setError("");
+    setLoading(true);
+
+    const result = await signIn(form.email, form.password);
+    
+    if (result.error) {
+      setError(getFirebaseErrorMessage(result.error));
+      setLoading(false);
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   const handleGoogleSignIn = () => {
@@ -95,6 +109,13 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Field */}
@@ -156,21 +177,23 @@ export default function LoginPage() {
             {/* Login Button */}
             <button
               type="submit"
-              className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-accent to-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-accent/50"
+              disabled={loading}
+              className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-accent to-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Login
+              {loading ? "Loggar in..." : "Login"}
             </button>
           </form>
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
             
-            <Link to="/SignUp"> <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <a href="#" className="text-accent hover:text-accent/80 font-medium transition-colors">
-                Sign up
-              </a>
-            </p>
+            <Link to="/signup">
+              <p className="text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <span className="text-accent hover:text-accent/80 font-medium transition-colors cursor-pointer">
+                  Sign up
+                </span>
+              </p>
             </Link>
           </div>
         </div>
