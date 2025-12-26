@@ -3,7 +3,7 @@ import Navbar from "../components/Navbar";
 import { Mail, Lock } from "lucide-react";
 import Starfield from "../components/Starfield";
 import { Link, useNavigate } from "react-router-dom";
-import { signIn, getFirebaseErrorMessage } from "../firebase";
+import { signIn, toAuthErrorMessage } from "../firebase";
 
 type FormState = {
   email: string;
@@ -35,13 +35,21 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const result = await signIn(form.email, form.password);
-    
-    if (result.error) {
-      setError(getFirebaseErrorMessage(result.error));
+    try {
+      const result = await signIn(form.email, form.password);
+      
+      if (result.error) {
+        // result.error is the error code, but we need to create a proper error object
+        const errorObj = { code: result.error } as any;
+        setError(toAuthErrorMessage(errorObj));
+        setLoading(false);
+      } else {
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      console.error('Unexpected error in handleSubmit:', err);
+      setError(toAuthErrorMessage(err));
       setLoading(false);
-    } else {
-      navigate("/dashboard");
     }
   };
 
