@@ -4,6 +4,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { firebaseAuth, signOutUser } from "../firebase";
 import Navbar from "../components/Navbar";
 import Starfield from "../components/Starfield";
+import  RepoList from "../components/RepoList"
 
 
 export default function Dashboard() {
@@ -43,13 +44,7 @@ export default function Dashboard() {
       <Starfield />
       <Navbar />
 
-     <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <RepoList />
-          </div>
-        </div>
-      </main>
+    <RepoList/>
     </div>
   );
 }

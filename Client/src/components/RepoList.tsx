@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookMarked, GitBranch, Plus, Star } from 'lucide-react';
-import { useGit } from '@/context/GitContext';
 import { formatDistanceToNow } from 'date-fns';
 
 const RepoList = () => {
-  const { repositories, createRepository } = useGit();
   const [showNewRepoForm, setShowNewRepoForm] = useState(false);
   const [newRepoName, setNewRepoName] = useState('');
   const [newRepoDesc, setNewRepoDesc] = useState('');
 
+const repositories = [
+  { id: "3", name: "repo-3", description: "", branch: "sfs", createdAt: "dcda", branches: "dsfsdf" },
+];
+  
+
   const handleCreateRepo = (e: React.FormEvent) => {
     e.preventDefault();
     if (newRepoName.trim()) {
-      createRepository(newRepoName.trim(), newRepoDesc.trim());
+      //createRepository(newRepoName.trim(), newRepoDesc.trim());
       setNewRepoName('');
       setNewRepoDesc('');
       setShowNewRepoForm(false);
