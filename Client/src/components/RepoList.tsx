@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookMarked, GitBranch, Plus, Star } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { safeDistanceToNow } from '../utils/dateHelpers';
 
 const RepoList = () => {
   const [showNewRepoForm, setShowNewRepoForm] = useState(false);
@@ -105,7 +105,7 @@ const repositories = [
                     {repo.branches.length} branches
                   </span>
                   <span>
-                    Updated {formatDistanceToNow(repo.createdAt, { addSuffix: true })}
+                    Updated {safeDistanceToNow(repo.createdAt)}
                   </span>
                 </div>
               </div>
