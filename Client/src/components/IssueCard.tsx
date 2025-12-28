@@ -10,9 +10,9 @@ interface IssueCardProps {
 }
 
 const priorityColors = {
-  low: 'bg-muted text-muted-foreground',
-  medium: 'bg-primary/20 text-primary',
-  high: 'bg-destructive/20 text-destructive',
+  low: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+  medium: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300',
+  high: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
 };
 
 const IssueCard = ({ issue, repoId }: IssueCardProps) => {
@@ -37,18 +37,33 @@ const IssueCard = ({ issue, repoId }: IssueCardProps) => {
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColors[issue.priority]}`}>
             {issue.priority}
           </span>
-          {issue.labels.map((label) => (
-            <span
-              key={label.id}
-              className="text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{ 
-                backgroundColor: `${label.color}20`,
-                color: label.color,
-              }}
-            >
-              {label.name}
-            </span>
-          ))}
+          {issue.labels.map((label) => {
+            // Ensure label color has good contrast - if color is too light, use dark text
+            const isLightColor = label.color && (
+              label.color.toLowerCase().includes('fff') ||
+              label.color.toLowerCase().includes('white') ||
+              label.color.toLowerCase().includes('#f') ||
+              label.color.toLowerCase().includes('rgb(255')
+            );
+            return (
+              <span
+                key={label.id}
+                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  isLightColor ? 'text-gray-800 dark:text-gray-200' : ''
+                }`}
+                style={{ 
+                  backgroundColor: isLightColor 
+                    ? `${label.color}40` 
+                    : `${label.color}20`,
+                  color: isLightColor 
+                    ? '#1f2937' // dark gray for light backgrounds
+                    : label.color || '#6b7280', // use label color or fallback
+                }}
+              >
+                {label.name}
+              </span>
+            );
+          })}
         </div>
         
         <p className="text-sm text-muted-foreground mt-1">

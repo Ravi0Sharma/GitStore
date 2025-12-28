@@ -54,9 +54,9 @@ const CreateIssueModal = ({ open, onClose, onSubmit }: CreateIssueModalProps) =>
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="bg-card border-border max-w-2xl">
+      <DialogContent className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm text-foreground max-w-2xl">
         <DialogHeader>
-          <div className="text-foreground text-xl">Create New Issue</div>
+          <div className="text-foreground text-xl font-semibold">Create New Issue</div>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -66,7 +66,7 @@ const CreateIssueModal = ({ open, onClose, onSubmit }: CreateIssueModalProps) =>
               placeholder="Issue title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="github-input w-full text-lg"
+              className="w-full text-lg px-4 py-2 bg-background/50 text-foreground border border-border/50 rounded-md placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40"
               required
             />
           </div>
@@ -76,25 +76,33 @@ const CreateIssueModal = ({ open, onClose, onSubmit }: CreateIssueModalProps) =>
               placeholder="Add a description... (Markdown supported)&#10;&#10;You can use checklists:&#10;- [ ] Unchecked item&#10;- [x] Checked item"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="github-input w-full min-h-[200px] font-mono text-sm"
+              className="w-full min-h-[200px] font-mono text-sm px-4 py-2 bg-background/50 text-foreground border border-border/50 rounded-md placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 resize-y"
             />
           </div>
           
           <div className="flex flex-wrap gap-3">
             {/* Priority selector */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="github-btn-secondary flex items-center gap-2 text-sm">
+              <DropdownMenuTrigger className="flex items-center gap-2 text-sm px-4 py-2 bg-background/50 hover:bg-background/70 text-foreground border border-border/50 rounded-md transition-colors">
+                <span className={`w-2 h-2 rounded-full ${
+                  priority === 'low' ? 'bg-blue-500' : 
+                  priority === 'medium' ? 'bg-yellow-500' : 
+                  'bg-red-500'
+                }`}></span>
                 Priority: {priorityLabels[priority]}
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-card border-border">
-                <DropdownMenuItem onClick={() => setPriority('low')}>
+              <DropdownMenuContent align="start" className="bg-secondary/30 backdrop-blur-sm text-foreground border-border/50 shadow-lg">
+                <DropdownMenuItem onClick={() => setPriority('low')} className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-blue-500"></span>
                   Low
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setPriority('medium')}>
+                <DropdownMenuItem onClick={() => setPriority('medium')} className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
                   Medium
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setPriority('high')}>
+                <DropdownMenuItem onClick={() => setPriority('high')} className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-red-500"></span>
                   High
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -102,11 +110,11 @@ const CreateIssueModal = ({ open, onClose, onSubmit }: CreateIssueModalProps) =>
 
             {/* Labels multi-select */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="github-btn-secondary flex items-center gap-2 text-sm">
+              <DropdownMenuTrigger className="flex items-center gap-2 text-sm px-4 py-2 bg-background/50 hover:bg-background/70 text-foreground border border-border/50 rounded-md transition-colors">
                 Labels ({selectedLabels.length})
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-card border-border">
+              <DropdownMenuContent align="start" className="bg-secondary/30 backdrop-blur-sm text-foreground border-border/50 shadow-lg">
                 {DEFAULT_LABELS.map((label) => {
                   const isSelected = selectedLabels.some((l) => l.id === label.id);
                   return (
@@ -139,33 +147,48 @@ const CreateIssueModal = ({ open, onClose, onSubmit }: CreateIssueModalProps) =>
           {/* Selected labels display */}
           {selectedLabels.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {selectedLabels.map((label) => (
-                <span
-                  key={label.id}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium"
-                  style={{ 
-                    backgroundColor: `${label.color}20`,
-                    color: label.color,
-                  }}
-                >
-                  {label.name}
-                  <button
-                    type="button"
-                    onClick={() => toggleLabel(label)}
-                    className="hover:opacity-80"
+              {selectedLabels.map((label) => {
+                // Ensure label color has good contrast - if color is too light, use dark text
+                const isLightColor = label.color && (
+                  label.color.toLowerCase().includes('fff') ||
+                  label.color.toLowerCase().includes('white') ||
+                  label.color.toLowerCase().includes('#f') ||
+                  label.color.toLowerCase().includes('rgb(255')
+                );
+                return (
+                  <span
+                    key={label.id}
+                    className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium border border-border/30 ${
+                      isLightColor ? 'text-foreground' : ''
+                    }`}
+                    style={{ 
+                      backgroundColor: isLightColor 
+                        ? `${label.color}30` 
+                        : `${label.color}20`,
+                      color: isLightColor 
+                        ? 'hsl(var(--foreground))' // use theme foreground for light backgrounds
+                        : label.color || 'hsl(var(--muted-foreground))', // use label color or fallback
+                    }}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
+                    {label.name}
+                    <button
+                      type="button"
+                      onClick={() => toggleLabel(label)}
+                      className="hover:opacity-80 text-foreground/70 hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           )}
           
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <button type="button" onClick={onClose} className="github-btn-secondary">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-background/50 hover:bg-background/70 text-foreground border border-border/50 rounded-md transition-colors">
               Cancel
             </button>
-            <button type="submit" className="github-btn-warning">
+            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors font-medium shadow-sm">
               Create Issue
             </button>
           </div>
