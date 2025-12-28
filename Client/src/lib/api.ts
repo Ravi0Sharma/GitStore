@@ -185,8 +185,8 @@ export const api = {
     });
   },
 
-  async merge(repoId: string, branch: string): Promise<void> {
-    await fetchJSON(`/api/repos/${repoId}/merge`, {
+  async merge(repoId: string, branch: string): Promise<{ message: string; type?: string }> {
+    return fetchJSON<{ message: string; type?: string }>(`/api/repos/${repoId}/merge`, {
       method: 'POST',
       body: JSON.stringify({ branch }),
     });

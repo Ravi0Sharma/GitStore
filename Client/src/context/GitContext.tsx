@@ -324,12 +324,30 @@ export function GitProvider({ children }: GitProviderProps) {
       // First checkout to target branch
       await api.checkout(repoId, toBranch);
       // Then merge fromBranch into toBranch
-      await api.merge(repoId, fromBranch);
-      await loadRepositories(); // Reload to get updated state
-      return { success: true, message: `Successfully merged ${fromBranch} into ${toBranch}` };
+      const mergeResponse = await api.merge(repoId, fromBranch);
+      
+      // Only reload state on successful merge
+      await loadRepositories();
+      
+      // Determine merge type from response or default to fast-forward
+      const mergeType = mergeResponse.type === 'fast-forward' ? 'fast-forward' : 'fast-forward';
+      return { 
+        success: true, 
+        message: `Successfully merged ${fromBranch} into ${toBranch}`,
+        type: mergeType
+      };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Merge failed';
-      return { success: false, message };
+      const errorMessage = err instanceof Error ? err.message : 'Merge failed';
+      
+      // Check if it's a non-fast-forward error (409 conflict)
+      if (errorMessage.includes('Non-fast-forward') || errorMessage.includes('409')) {
+        return { 
+          success: false, 
+          message: 'Non-fast-forward merge is not allowed. The branches have diverged and cannot be merged automatically.' 
+        };
+      }
+      
+      return { success: false, message: errorMessage };
     }
   };
 

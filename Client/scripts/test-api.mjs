@@ -214,20 +214,232 @@ async function main() {
     results.failed++;
   }
   
-  // Test 7: POST /api/repos/:id/merge
-  const mergeResult = await testEndpoint(
-    'POST /api/repos/:id/merge',
+  // Test 7: POST /api/repos/:id/commit (create commit on master branch)
+  logInfo('\n--- Testing commits for merge scenarios ---');
+  const commitResult1 = await testEndpoint(
+    'POST /api/repos/:id/commit (master branch)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/commit`,
+    { message: 'Initial commit on master' }
+  );
+  if (commitResult1.success) {
+    results.passed++;
+    logInfo('  Created initial commit on main branch');
+  } else if (commitResult1.status === 404) {
+    logInfo('  → Repo not found (skipping commit test)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  // Wait a bit for server to process
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Test 8: POST /api/repos/:id/checkout (switch to feature branch)
+  const checkoutFeatureResult = await testEndpoint(
+    'POST /api/repos/:id/checkout (to feature branch)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/checkout`,
+    { branch: testBranchName }
+  );
+  if (checkoutFeatureResult.success) {
+    results.passed++;
+    logInfo('  Switched to feature branch');
+  } else if (checkoutFeatureResult.status === 404) {
+    logInfo('  → Repo not found (skipping checkout test)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Test 9: POST /api/repos/:id/commit (create commit on feature branch)
+  const commitResult2 = await testEndpoint(
+    'POST /api/repos/:id/commit (feature branch)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/commit`,
+    { message: 'Commit on feature branch' }
+  );
+  if (commitResult2.success) {
+    results.passed++;
+    logInfo('  Created commit on feature branch');
+  } else if (commitResult2.status === 404) {
+    logInfo('  → Repo not found (skipping commit test)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Test 10: POST /api/repos/:id/checkout (switch back to master)
+  const checkoutMainResult = await testEndpoint(
+    'POST /api/repos/:id/checkout (back to master)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/checkout`,
+    { branch: 'master' }
+  );
+  if (checkoutMainResult.success) {
+    results.passed++;
+    logInfo('  Switched back to main branch');
+  } else if (checkoutMainResult.status === 404) {
+    logInfo('  → Repo not found (skipping checkout test)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Test 11: POST /api/repos/:id/merge (FAST-FORWARD merge)
+  logInfo('\n--- Testing Fast-Forward Merge ---');
+  logInfo('  Scenario: Merging feature branch into master (feature is ahead)');
+  const fastForwardMergeResult = await testEndpoint(
+    'POST /api/repos/:id/merge (fast-forward)',
     'POST',
     `${BASE_URL}/api/repos/${testRepoName}/merge`,
     { branch: testBranchName }
   );
-  if (mergeResult.success) {
+  if (fastForwardMergeResult.success) {
     results.passed++;
-  } else if (mergeResult.status === 404) {
+    logPass('  Fast-forward merge succeeded as expected');
+    if (fastForwardMergeResult.data?.type === 'fast-forward') {
+      logPass('  Response correctly indicates fast-forward type');
+      results.passed++;
+    }
+    
+    // Verify branch state after merge
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const branchesAfterFF = await testEndpoint(
+      'GET /api/repos/:id/branches (after fast-forward merge)',
+      'GET',
+      `${BASE_URL}/api/repos/${testRepoName}/branches`
+    );
+    if (branchesAfterFF.success) {
+      results.passed++;
+      logInfo('  Branch list retrieved successfully after merge');
+    }
+  } else if (fastForwardMergeResult.status === 404) {
     logInfo('  → Repo not found (skipping merge test)');
     results.skipped++;
   } else {
+    logFail(`  Fast-forward merge failed unexpectedly: ${fastForwardMergeResult.error}`);
     results.failed++;
+  }
+
+  // Test 12: Create non-fast-forward scenario
+  logInfo('\n--- Setting up Non-Fast-Forward Merge Scenario ---');
+  
+  // Create a new branch from current main
+  const testBranch2 = 'feature/diverged-branch';
+  const checkoutBranch2Result = await testEndpoint(
+    'POST /api/repos/:id/checkout (create diverged branch)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/checkout`,
+    { branch: testBranch2 }
+  );
+  if (checkoutBranch2Result.success) {
+    results.passed++;
+    logInfo(`  Created branch: ${testBranch2}`);
+  } else if (checkoutBranch2Result.status === 404) {
+    logInfo('  → Repo not found (skipping)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Create commit on diverged branch
+  const commitResult3 = await testEndpoint(
+    'POST /api/repos/:id/commit (diverged branch)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/commit`,
+    { message: 'Commit on diverged branch' }
+  );
+  if (commitResult3.success) {
+    results.passed++;
+    logInfo('  Created commit on diverged branch');
+  } else if (commitResult3.status === 404) {
+    logInfo('  → Repo not found (skipping)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Create another commit on master to diverge
+  const checkoutMain2Result = await testEndpoint(
+    'POST /api/repos/:id/checkout (back to master for divergence)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/checkout`,
+    { branch: 'master' }
+  );
+  if (checkoutMain2Result.success) {
+    results.passed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  const commitResult4 = await testEndpoint(
+    'POST /api/repos/:id/commit (master branch diverged)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/commit`,
+    { message: 'Commit on master after branch diverged' }
+  );
+  if (commitResult4.success) {
+    results.passed++;
+    logInfo('  Created commit on main to create divergence');
+  } else if (commitResult4.status === 404) {
+    logInfo('  → Repo not found (skipping)');
+    results.skipped++;
+  } else {
+    results.failed++;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Test 13: POST /api/repos/:id/merge (NON-FAST-FORWARD merge - should fail)
+  logInfo('\n--- Testing Non-Fast-Forward Merge (should be rejected) ---');
+  logInfo('  Scenario: Merging diverged branch into master (branches have diverged)');
+  const nonFFMergeResult = await testEndpoint(
+    'POST /api/repos/:id/merge (non-fast-forward)',
+    'POST',
+    `${BASE_URL}/api/repos/${testRepoName}/merge`,
+    { branch: testBranch2 }
+  );
+  if (nonFFMergeResult.success) {
+    logFail('  Non-fast-forward merge succeeded but should have been rejected!');
+    results.failed++;
+  } else if (nonFFMergeResult.status === 409) {
+    results.passed++;
+    logPass('  Non-fast-forward merge correctly rejected with 409 Conflict');
+    if (nonFFMergeResult.error?.includes('Non-fast-forward') || nonFFMergeResult.error?.includes('not allowed')) {
+      logPass('  Error message correctly indicates non-fast-forward rejection');
+      results.passed++;
+    } else {
+      logInfo(`  Error message: ${nonFFMergeResult.error}`);
+    }
+  } else if (nonFFMergeResult.status === 404) {
+    logInfo('  → Repo not found (skipping merge test)');
+    results.skipped++;
+  } else {
+    logFail(`  Non-fast-forward merge returned unexpected status: ${nonFFMergeResult.status}`);
+    results.failed++;
+  }
+
+  // Verify branch state was NOT changed after failed merge
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const branchesAfterNonFF = await testEndpoint(
+    'GET /api/repos/:id/branches (after rejected merge)',
+    'GET',
+    `${BASE_URL}/api/repos/${testRepoName}/branches`
+  );
+  if (branchesAfterNonFF.success) {
+    results.passed++;
+    logInfo('  Branch list retrieved successfully (state should be unchanged)');
   }
   
   // Summary

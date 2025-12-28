@@ -15,6 +15,7 @@ const MergePage = () => {
   const [fromBranch, setFromBranch] = useState('');
   const [toBranch, setToBranch] = useState('');
   const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
 
   // Redirect if no repoId
   useEffect(() => {
@@ -64,8 +65,27 @@ const MergePage = () => {
 
   const handleMerge = async () => {
     if (fromBranch && toBranch && fromBranch !== toBranch) {
-      const result = await mergeBranches(repo.id, fromBranch, toBranch);
-      setMergeResult(result);
+      setIsMerging(true);
+      setMergeResult(null); // Clear previous result
+      try {
+        const result = await mergeBranches(repo.id, fromBranch, toBranch);
+        setMergeResult(result);
+        
+        // If merge was successful, refresh the repo data to show updated branches/commits
+        if (result.success) {
+          // The mergeBranches function already calls loadRepositories, but we can also
+          // explicitly refresh the current repo view
+          await loadRepositories();
+        }
+      } catch (err) {
+        // This should not happen as mergeBranches catches errors, but just in case
+        setMergeResult({
+          success: false,
+          message: err instanceof Error ? err.message : 'An unexpected error occurred'
+        });
+      } finally {
+        setIsMerging(false);
+      }
     }
   };
 
@@ -113,7 +133,15 @@ const MergePage = () => {
               {mergeResult.success && mergeResult.type === 'fast-forward' && (
                 <div className="mt-3 p-3 bg-card rounded-md border border-border">
                   <p className="text-xs text-muted-foreground">Merge type</p>
-                  <p className="font-mono text-sm text-foreground mt-1">Fast-forward</p>
+                  <p className="font-mono text-sm text-foreground mt-1">Fast-forward merge completed</p>
+                </div>
+              )}
+              {!mergeResult.success && (
+                <div className="mt-3 p-3 bg-card rounded-md border border-border">
+                  <p className="text-xs text-muted-foreground">Note</p>
+                  <p className="text-sm text-foreground mt-1">
+                    No changes were made to the repository. You can try a different merge or navigate away.
+                  </p>
                 </div>
               )}
             </div>
@@ -180,13 +208,13 @@ const MergePage = () => {
             <div className="mt-6 pt-6 border-t border-border">
               <button
                 onClick={handleMerge}
-                disabled={!canMerge}
+                disabled={!canMerge || isMerging}
                 className={`flex items-center gap-2 ${
-                  canMerge ? 'github-btn-primary' : 'bg-muted text-muted-foreground cursor-not-allowed px-4 py-2 rounded-md'
+                  canMerge && !isMerging ? 'github-btn-primary' : 'bg-muted text-muted-foreground cursor-not-allowed px-4 py-2 rounded-md'
                 }`}
               >
                 <GitMerge className="h-4 w-4" />
-                Merge branches
+                {isMerging ? 'Merging...' : 'Merge branches'}
               </button>
             </div>
           </div>
