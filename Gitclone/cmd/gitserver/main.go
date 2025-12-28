@@ -946,20 +946,24 @@ func (s *Server) handleIssue(w http.ResponseWriter, r *http.Request, repoID, iss
 					Status string `json:"status,omitempty"`
 					Body   string `json:"body,omitempty"`
 				}
-				if err := json.NewDecoder(r.Body).Decode(&updateReq); err == nil {
-					if updateReq.Status != "" {
-						issues[i].Status = updateReq.Status
-					}
-					if updateReq.Body != "" {
-						issues[i].Body = updateReq.Body
-					}
+				// Try to decode request body, but default to toggle if empty
+				_ = json.NewDecoder(r.Body).Decode(&updateReq)
+
+				// If status is explicitly provided, use it; otherwise toggle
+				if updateReq.Status != "" {
+					issues[i].Status = updateReq.Status
 				} else {
-					// If no body, just toggle status
+					// Toggle status
 					if issues[i].Status == "open" {
 						issues[i].Status = "closed"
 					} else {
 						issues[i].Status = "open"
 					}
+				}
+
+				// Update body if provided
+				if updateReq.Body != "" {
+					issues[i].Body = updateReq.Body
 				}
 				break
 			}
