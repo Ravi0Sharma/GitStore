@@ -173,6 +173,11 @@ export const api = {
     });
   },
 
+  async createBranch(repoId: string, branchName: string): Promise<void> {
+    // checkout creates branch if it doesn't exist
+    await this.checkout(repoId, branchName);
+  },
+
   async commit(repoId: string, message: string): Promise<void> {
     await fetchJSON(`/api/repos/${repoId}/commit`, {
       method: 'POST',
@@ -180,10 +185,28 @@ export const api = {
     });
   },
 
-  async merge(repoId: string, branch: string): Promise<void> {
-    await fetchJSON(`/api/repos/${repoId}/merge`, {
+  async merge(repoId: string, branch: string): Promise<{ message: string; type?: string }> {
+    return fetchJSON<{ message: string; type?: string }>(`/api/repos/${repoId}/merge`, {
       method: 'POST',
       body: JSON.stringify({ branch }),
+    });
+  },
+
+  async createIssue(repoId: string, title: string, body: string, priority: string, labels: any[], author?: string): Promise<any> {
+    return fetchJSON<any>(`/api/repos/${repoId}/issues`, {
+      method: 'POST',
+      body: JSON.stringify({ title, body, priority, labels, author }),
+    });
+  },
+
+  async getIssues(repoId: string): Promise<any[]> {
+    return fetchJSON<any[]>(`/api/repos/${repoId}/issues`);
+  },
+
+  async toggleIssueStatus(repoId: string, issueId: string): Promise<any> {
+    return fetchJSON<any>(`/api/repos/${repoId}/issues/${issueId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({}),
     });
   },
 };

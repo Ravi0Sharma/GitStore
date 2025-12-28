@@ -161,7 +161,40 @@ curl http://localhost:8080/api/repos/test-repo
 
 # 5. Get repository branches
 curl http://localhost:8080/api/repos/test-repo/branches
+
+# 6. Create a new branch (checkout creates branch if it doesn't exist)
+curl -X POST http://localhost:8080/api/repos/test-repo/checkout \
+  -H "Content-Type: application/json" \
+  -d '{"branch":"feature/new-feature"}'
+
+# 7. List branches again (should include new branch)
+curl http://localhost:8080/api/repos/test-repo/branches
+
+# 8. Merge branches
+curl -X POST http://localhost:8080/api/repos/test-repo/merge \
+  -H "Content-Type: application/json" \
+  -d '{"branch":"feature/new-feature"}'
 ```
+
+### Automated API Testing
+
+You can run the automated test script to verify all endpoints:
+
+```bash
+# From Client directory
+node scripts/test-api.mjs
+
+# Or with custom base URL
+node scripts/test-api.mjs http://localhost:8080
+```
+
+The script tests:
+- GET /api/repos
+- POST /api/repos
+- GET /api/repos/:id/branches
+- POST /api/repos/:id/checkout (creates branch)
+- GET /api/repos/:id/commits
+- POST /api/repos/:id/merge
 
 **Expected behavior:**
 - `GET /api/repos` should always return a JSON array: `[]` (empty) or `[{...}, {...}]` (never `null`)

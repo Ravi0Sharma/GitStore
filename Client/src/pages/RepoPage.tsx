@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
+import { useEffect, useState } from 'react';
 import { 
   BookMarked, 
   GitBranch, 
@@ -16,9 +17,40 @@ import { routes } from '../routes';
 
 const RepoPage = () => {
   const { repoId } = useParams<{ repoId: string }>();
-  const { getRepository, switchBranch } = useGit();
+  const { getRepository, switchBranch, loadRepositories, loading } = useGit();
   const navigate = useNavigate();
+  const [isRefetching, setIsRefetching] = useState(false);
+  
+  // Redirect if no repoId
+  useEffect(() => {
+    if (!repoId) {
+      navigate(routes.dashboard);
+    }
+  }, [repoId, navigate]);
+
+  // Try to refetch if repo not found
+  useEffect(() => {
+    if (repoId && !getRepository(repoId) && !loading && !isRefetching) {
+      setIsRefetching(true);
+      loadRepositories().finally(() => setIsRefetching(false));
+    }
+  }, [repoId, loading, isRefetching]);
+
   const repo = getRepository(repoId || '');
+
+  if (!repoId) {
+    return null; // Will redirect
+  }
+
+  if (!repo && (loading || isRefetching)) {
+    return (
+      <main className="container mx-auto px-4 py-8">
+        <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
+          <p className="text-muted-foreground">Loading repository...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!repo) {
     return (
@@ -85,7 +117,7 @@ const RepoPage = () => {
           </Link>
         </div>
 
-        <div className="github-card mb-6">
+        <div className="bg-secondary/50 rounded-lg border border-border shadow-md mb-6">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -105,8 +137,8 @@ const RepoPage = () => {
             {repo.branches.map((branch) => (
               <div
                 key={branch.name}
-                className={`p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors cursor-pointer ${
-                  branch.name === repo.currentBranch ? 'bg-secondary/50' : ''
+                className={`p-4 flex items-center justify-between hover:bg-secondary/60 transition-colors cursor-pointer ${
+                  branch.name === repo.currentBranch ? 'bg-secondary/70' : ''
                 }`}
                 onClick={() => switchBranch(repo.id, branch.name)}
               >
@@ -129,7 +161,7 @@ const RepoPage = () => {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm">
+        <div className="rounded-2xl border border-border bg-secondary/50 shadow-md">
           <div className="p-4 border-b border-border/50">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
