@@ -25,7 +25,18 @@ export function convertAPIRepo(apiRepo: APIRepository): Repository {
       author: c.author,
       date: new Date(c.date),
     })),
-    issues: [], // Issues not implemented in backend yet
+    issues: apiRepo.issues ? apiRepo.issues.map((issue: any) => ({
+      id: issue.id,
+      title: issue.title,
+      body: issue.body,
+      status: issue.status,
+      priority: issue.priority,
+      labels: issue.labels || [],
+      author: issue.author || 'system',
+      authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
+      createdAt: issue.createdAt || new Date().toISOString(),
+      commentCount: issue.commentCount || 0,
+    })) : [],
   };
 }
 
