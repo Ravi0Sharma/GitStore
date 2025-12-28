@@ -9,7 +9,8 @@ import {
   Code, 
   Clock,
   ArrowLeft,
-  CircleDot
+  CircleDot,
+  Terminal
 } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
 import { routes } from '../routes';
@@ -78,10 +79,19 @@ const RepoPage = () => {
         </button>
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-            <BookMarked className="h-6 w-6 text-muted-foreground" />
-            {repo.name}
-          </h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              <BookMarked className="h-6 w-6 text-muted-foreground" />
+              {repo.name}
+            </h1>
+            <Link
+              to={routes.dashboardRepoCLI(repo.id)}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium"
+            >
+              <Terminal className="h-4 w-4" />
+              Enter CLI
+            </Link>
+          </div>
           {repo.description && (
             <p className="text-muted-foreground mt-2">{repo.description}</p>
           )}
