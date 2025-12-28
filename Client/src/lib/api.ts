@@ -209,5 +209,12 @@ export const api = {
       body: JSON.stringify({}),
     });
   },
+
+  async createOrEditFile(repoId: string, path: string, content: string): Promise<{ message: string; path: string }> {
+    return fetchJSON<{ message: string; path: string }>(`/api/repos/${repoId}/files`, {
+      method: 'POST',
+      body: JSON.stringify({ path, content }),
+    });
+  },
 };
 

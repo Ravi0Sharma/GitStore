@@ -66,7 +66,11 @@ const RepoPage = () => {
     );
   }
 
-  const latestCommit = repo.commits && repo.commits.length > 0 ? repo.commits[repo.commits.length - 1] : null;
+  // Get the latest commit (first in array, as commits are loaded from tip backwards)
+  // Or sort by date to be safe
+  const latestCommit = repo.commits && repo.commits.length > 0 
+    ? [...repo.commits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+    : null;
 
   return (
     <main className="container mx-auto px-4 py-8">

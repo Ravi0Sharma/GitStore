@@ -176,6 +176,11 @@ type CreateIssueRequest struct {
 	Author   string  `json:"author,omitempty"` // Optional: email from frontend
 }
 
+type FileRequest struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 func (s *Server) handleListRepos(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("GET /api/repos - Loading repos from metadata store")
@@ -264,6 +269,8 @@ func (s *Server) handleRepoRoutes(w http.ResponseWriter, r *http.Request) {
 		s.handleRepoCommit(w, r, repoID)
 	case "merge":
 		s.handleRepoMerge(w, r, repoID)
+	case "files":
+		s.handleRepoFiles(w, r, repoID)
 	case "issues":
 		// Check if it's a specific issue operation (e.g., /api/repos/:id/issues/:issueId)
 		if len(parts) >= 3 && parts[2] != "" {
@@ -1054,6 +1061,51 @@ func (s *Server) saveIssue(repoID string, issue Issue) error {
 	}
 
 	return nil
+}
+
+func (s *Server) handleRepoFiles(w http.ResponseWriter, r *http.Request, repoID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req FileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	if req.Path == "" {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "File path is required"})
+		return
+	}
+
+	repoPath := filepath.Join(s.repoBase, repoID)
+	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
+		return
+	}
+
+	// Create full file path
+	fullPath := filepath.Join(repoPath, req.Path)
+
+	// Ensure directory exists
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create directory: %v", err)})
+		return
+	}
+
+	// Write file
+	if err := os.WriteFile(fullPath, []byte(req.Content), 0644); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to write file: %v", err)})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"message": "File created/updated successfully",
+		"path":    req.Path,
+	})
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {

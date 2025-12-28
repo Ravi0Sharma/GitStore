@@ -60,19 +60,27 @@ const CLIPage = () => {
       switch (mainCommand) {
         case 'help':
           output = `Available commands:
-  help              - Show this help message
-  status            - Show repository status
-  branch            - List branches
-  branches          - List branches
-  commits           - List commits
-  log               - Show commit log
-  clear             - Clear terminal
-  exit              - Exit CLI
+  help                    - Show this help message
+  status                  - Show repository status
+  branch                  - List branches
+  branches                - List branches
+  commits                 - List commits
+  log                     - Show commit log
+  create file <path> [content] - Create a new file
+  edit file <path> [content]   - Edit an existing file
+  clear                   - Clear terminal
+  exit                    - Exit CLI
 
 Git commands (via API):
-  git status        - Show repository status
-  git branch        - List branches
-  git log           - Show commit log
+  git status              - Show repository status
+  git branch              - List branches
+  git log                 - Show commit log
+  git commit -m "message" - Commit changes
+
+Examples:
+  create file src/test.txt Hello World
+  edit file src/test.txt Updated content
+  git commit -m "Add test file"
 
 Repository: ${repo?.name || repoId}
 Current branch: ${repo?.currentBranch || 'main'}
@@ -151,6 +159,18 @@ Current branch: ${repo?.currentBranch || 'main'}
             } catch (error) {
               output = `Error: ${error instanceof Error ? error.message : 'Failed to fetch commits'}`;
             }
+          } else if (args[0] === 'commit' && args[1] === '-m' && args[2]) {
+            if (!repoId) {
+              output = 'Error: Repository ID missing';
+              break;
+            }
+            try {
+              const message = args.slice(2).join(' ');
+              await api.commit(repoId, message);
+              output = `Commit created successfully!\nMessage: ${message}`;
+            } catch (error) {
+              output = `Error: ${error instanceof Error ? error.message : 'Failed to create commit'}`;
+            }
           } else {
             output = `Unknown git command: ${args.join(' ')}\nUse 'help' for available commands.`;
           }
@@ -200,6 +220,82 @@ Current branch: ${repo?.currentBranch || 'main'}
             }
           } catch (error) {
             output = `Error: ${error instanceof Error ? error.message : 'Failed to fetch commits'}`;
+          }
+          break;
+
+        case 'create':
+          if (args[0] !== 'file') {
+            output = `Unknown command: create ${args[0] || '(nothing)'}\nUse 'create file <path> [content]' to create a file.\nExample: create file test.txt Hello World`;
+            break;
+          }
+          if (!repoId) {
+            output = 'Error: Repository ID missing';
+            break;
+          }
+          if (args.length < 2) {
+            output = 'Error: File path is required\nUsage: create file <path> [content]\nExample: create file test.txt Hello World';
+            break;
+          }
+          try {
+            const filePath = args[1];
+            const content = args.slice(2).join(' ') || '';
+            await api.createOrEditFile(repoId, filePath, content);
+            output = `File created: ${filePath}\n`;
+            if (content) {
+              output += `Content: "${content}"\n`;
+            } else {
+              output += `(empty file)\n`;
+            }
+            output += `You can now use 'git commit -m "message"' to commit this file.`;
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Failed to create file';
+            output = `Error: ${errorMsg}\n`;
+            if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+              output += `\nPossible issues:\n`;
+              output += `- GitStore server might not be running\n`;
+              output += `- Repository "${repoId}" might not exist\n`;
+              output += `- API endpoint /api/repos/${repoId}/files might not be available\n`;
+            } else {
+              output += `Make sure the GitStore server is running on http://localhost:8080`;
+            }
+          }
+          break;
+
+        case 'edit':
+          if (args[0] !== 'file') {
+            output = `Unknown command: edit ${args[0] || '(nothing)'}\nUse 'edit file <path> [content]' to edit a file.\nExample: edit file test.txt Updated content`;
+            break;
+          }
+          if (!repoId) {
+            output = 'Error: Repository ID missing';
+            break;
+          }
+          if (args.length < 2) {
+            output = 'Error: File path is required\nUsage: edit file <path> [content]\nExample: edit file test.txt Updated content';
+            break;
+          }
+          try {
+            const filePath = args[1];
+            const content = args.slice(2).join(' ') || '';
+            await api.createOrEditFile(repoId, filePath, content);
+            output = `File updated: ${filePath}\n`;
+            if (content) {
+              output += `Content: "${content}"\n`;
+            } else {
+              output += `(file cleared)\n`;
+            }
+            output += `You can now use 'git commit -m "message"' to commit this file.`;
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Failed to edit file';
+            output = `Error: ${errorMsg}\n`;
+            if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+              output += `\nPossible issues:\n`;
+              output += `- GitStore server might not be running\n`;
+              output += `- Repository "${repoId}" might not exist\n`;
+              output += `- API endpoint /api/repos/${repoId}/files might not be available\n`;
+            } else {
+              output += `Make sure the GitStore server is running on http://localhost:8080`;
+            }
           }
           break;
 
