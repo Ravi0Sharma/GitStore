@@ -188,9 +188,47 @@ export function GitProvider({ children }: GitProviderProps) {
     }
   };
 
-  const createIssue = (repoId: string, title: string, body: string, priority: Priority, labels: Label[]) => {
-    // TODO: Implement issue creation
-    console.log('Create issue not implemented yet');
+  const createIssue = async (repoId: string, title: string, body: string, priority: Priority, labels: Label[]) => {
+    try {
+      console.log('GitContext: Creating issue', repoId, title);
+      
+      // Call API to create issue
+      const issue = await api.createIssue(repoId, title, body, priority, labels);
+      setApiStatus('connected');
+      setApiError(null);
+      
+      // Update repo with new issue
+      setRepositories(prev => prev.map(repo => {
+        if (repo.id === repoId) {
+          // Convert issue to match Issue type
+          const newIssue: Issue = {
+            id: issue.id,
+            title: issue.title,
+            body: issue.body,
+            status: issue.status as IssueStatus,
+            priority: issue.priority as Priority,
+            labels: issue.labels || [],
+            author: issue.author || 'system',
+            authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
+            createdAt: issue.createdAt || new Date().toISOString(),
+            commentCount: issue.commentCount || 0,
+          };
+          return {
+            ...repo,
+            issues: [...repo.issues, newIssue],
+          };
+        }
+        return repo;
+      }));
+      
+      console.log('GitContext: Issue creation completed');
+    } catch (err) {
+      console.error('Failed to create issue:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setApiStatus('error');
+      setApiError(errorMsg);
+      throw err;
+    }
   };
 
   const updateIssueBody = (repoId: string, issueId: string, body: string) => {

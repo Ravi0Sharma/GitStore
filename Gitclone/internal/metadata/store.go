@@ -55,6 +55,11 @@ func (s *Store) Close() error {
 	return nil
 }
 
+// GetDB returns the underlying database for direct access
+func (s *Store) GetDB() *GitDb.DB {
+	return s.db
+}
+
 // ListRepos returns all repositories from the index
 func (s *Store) ListRepos() ([]RepoMeta, error) {
 	// Read index
