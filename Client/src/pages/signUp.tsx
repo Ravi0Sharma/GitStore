@@ -4,6 +4,7 @@ import { Mail, Lock, User } from "lucide-react";
 import Starfield from "../components/Starfield";
 import { Link, useNavigate } from "react-router-dom";
 import { signUp, toAuthErrorMessage } from "../firebase";
+import { routes } from "../routes";
 
 
 type FormState = {
@@ -59,7 +60,7 @@ export default function SignUpPage() {
         setError(toAuthErrorMessage(errorObj));
         setLoading(false);
       } else {
-        navigate("/dashboard");
+        navigate(routes.dashboard);
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
@@ -209,7 +210,7 @@ export default function SignUpPage() {
 
           {/* Sign In Link */}
           <div className="mt-6 text-center">
-            <Link to="/signin">
+            <Link to={routes.signIn}>
               <p className="text-sm text-muted-foreground">
                 Already have an account?{" "}
                 <span className="text-accent hover:text-accent/80 font-medium transition-colors cursor-pointer">

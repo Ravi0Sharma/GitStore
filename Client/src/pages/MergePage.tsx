@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
 import { GitMerge, ArrowLeft, ArrowRight, CheckCircle2, XCircle, GitBranch } from 'lucide-react';
 import { MergeResult } from '../types/git';
+import { routes } from '../routes';
 
 const MergePage = () => {
   const { repoId } = useParams<{ repoId: string }>();
@@ -20,7 +21,7 @@ const MergePage = () => {
         <main className="container mx-auto px-4 py-8">
           <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
             <p className="text-muted-foreground">Repository not found. Please select a repository from the dashboard.</p>
-            <Link to="/dashboard" className="text-accent hover:text-accent/80 mt-4 inline-block">
+            <Link to={routes.dashboard} className="text-accent hover:text-accent/80 mt-4 inline-block">
               ← Back to dashboard
             </Link>
           </div>
@@ -29,9 +30,9 @@ const MergePage = () => {
     );
   }
 
-  const handleMerge = () => {
+  const handleMerge = async () => {
     if (fromBranch && toBranch && fromBranch !== toBranch) {
-      const result = mergeBranches(repo.id, fromBranch, toBranch);
+      const result = await mergeBranches(repo.id, fromBranch, toBranch);
       setMergeResult(result);
     }
   };
@@ -42,7 +43,7 @@ const MergePage = () => {
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(`/repo/${repo.id}`)}
+          onClick={() => navigate(routes.dashboardRepo(repo.id))}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

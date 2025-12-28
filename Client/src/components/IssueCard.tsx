@@ -2,6 +2,7 @@ import { Issue } from '../types/git';
 import { CircleDot, CheckCircle2, MessageSquare } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
 import { Link } from 'react-router-dom';
+import { routes } from '../routes';
 
 interface IssueCardProps {
   issue: Issue;
@@ -17,7 +18,7 @@ const priorityColors = {
 const IssueCard = ({ issue, repoId }: IssueCardProps) => {
   return (
     <Link
-      to={`/repo/${repoId}/issues/${issue.id}`}
+      to={routes.dashboardRepoIssueDetail(repoId, issue.id)}
       className="flex items-start gap-4 p-4 border-b border-border hover:bg-secondary/30 transition-colors"
     >
       <div className="mt-1">
