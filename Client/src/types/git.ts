@@ -47,6 +47,11 @@ export interface Repository {
   branches: Branch[];
   issues: Issue[];
   commits: Commit[];
+  // Optional counts from backend (when full branch/commit data not loaded)
+  branchCount?: number;
+  commitCount?: number;
+  // Optional timestamp for "last updated" display
+  lastUpdated?: string;
 }
 
 export interface MergeResult {

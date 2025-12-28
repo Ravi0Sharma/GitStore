@@ -1,12 +1,14 @@
-import { GitBranch, LogOut, User } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { GitBranch, LogOut, User, CircleDot, GitMerge } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { signOutUser } from "../firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
 import { useEffect, useState } from "react";
+import { routes } from "../routes";
 
 const AuthNavbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<FirebaseUser | null>(null);
 
   useEffect(() => {
@@ -18,8 +20,13 @@ const AuthNavbar = () => {
 
   const handleSignOut = async () => {
     await signOutUser();
-    navigate("/signin");
+    navigate(routes.signIn);
   };
+
+  // Extract repoId from path if we're on a repo page
+  const repoMatch = location.pathname.match(/\/dashboard\/repo\/([^/]+)/);
+  const repoId = repoMatch ? repoMatch[1] : null;
+  const isRepoPage = repoId !== null;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
@@ -30,7 +37,7 @@ const AuthNavbar = () => {
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
               <GitBranch className="w-5 h-5 text-primary" />
             </div>
-            <Link to="/dashboard">
+            <Link to={routes.dashboard}>
               <span className="text-xl font-bold text-foreground">GitStore</span>
             </Link>
           </div>
@@ -38,41 +45,53 @@ const AuthNavbar = () => {
           {/* Navigation Links - Middle */}
           <div className="flex items-center gap-6">
             <Link
-              to="/dashboard"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              to={routes.dashboard}
+              className={`text-sm font-medium transition-colors ${
+                location.pathname === routes.dashboard
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               Dashboard
             </Link>
-            <Link
-              to="/repos"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Repos
-            </Link>
-            <Link
-              to="/issues"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Issues
-            </Link>
-            <Link
-              to="/branches"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Branches
-            </Link>
-            <Link
-              to="/merge"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Merge
-            </Link>
-            <Link
-              to="/history"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              History
-            </Link>
+            
+            {isRepoPage && (
+              <>
+                <Link
+                  to={routes.dashboardRepoIssues(repoId)}
+                  className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+                    location.pathname.includes('/issues')
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <CircleDot className="w-4 h-4" />
+                  Issues
+                </Link>
+                <Link
+                  to={routes.dashboardRepoBranches(repoId)}
+                  className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+                    location.pathname.includes('/branches')
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <GitBranch className="w-4 h-4" />
+                  Branches
+                </Link>
+                <Link
+                  to={routes.dashboardRepoMerge(repoId)}
+                  className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+                    location.pathname.includes('/merge')
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <GitMerge className="w-4 h-4" />
+                  Merge
+                </Link>
+              </>
+            )}
           </div>
 
           {/* User Menu - Right */}
