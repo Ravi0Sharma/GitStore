@@ -3,6 +3,8 @@ import { Repository, Issue, Priority, Label, MergeResult, IssueStatus } from '..
 import { api, Repository as APIRepository } from '../lib/api';
 import { convertAPIRepo } from '../lib/repoConverters';
 import { normalizeRepos, normalizeRepo, mergeById } from '../lib/normalize';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { firebaseAuth } from '../firebase';
 
 interface GitContextType {
   repositories: Repository[];
@@ -65,6 +67,15 @@ export function GitProvider({ children }: GitProviderProps) {
   const [pendingOptimisticRepo, setPendingOptimisticRepo] = useState<string | null>(null);
   const [apiStatus, setApiStatus] = useState<'unknown' | 'connected' | 'disconnected' | 'error'>('unknown');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+
+  // Get current user from Firebase
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     loadRepositories();
@@ -124,18 +135,26 @@ export function GitProvider({ children }: GitProviderProps) {
             
             // Load issues
             const issues = await api.getIssues(repo.id);
-            const convertedIssues: Issue[] = issues.map((issue: any) => ({
-              id: issue.id,
-              title: issue.title,
-              body: issue.body,
-              status: issue.status as IssueStatus,
-              priority: issue.priority as Priority,
-              labels: issue.labels || [],
-              author: issue.author || 'system',
-              authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
-              createdAt: issue.createdAt || new Date().toISOString(),
-              commentCount: issue.commentCount || 0,
-            }));
+            const convertedIssues: Issue[] = issues.map((issue: any) => {
+              // Use initials avatar (unisex) if authorAvatar is the old avataaars style
+              let avatarUrl = issue.authorAvatar;
+              if (!avatarUrl || avatarUrl.includes('avataaars')) {
+                const email = issue.author || 'system';
+                avatarUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(email)}`;
+              }
+              return {
+                id: issue.id,
+                title: issue.title,
+                body: issue.body,
+                status: issue.status as IssueStatus,
+                priority: issue.priority as Priority,
+                labels: issue.labels || [],
+                author: issue.author || 'system',
+                authorAvatar: avatarUrl,
+                createdAt: issue.createdAt || new Date().toISOString(),
+                commentCount: issue.commentCount || 0,
+              };
+            });
             
             return {
               ...repo,
@@ -213,18 +232,26 @@ export function GitProvider({ children }: GitProviderProps) {
         
         // Load issues
         const issues = await api.getIssues(created.id);
-        const convertedIssues: Issue[] = issues.map((issue: any) => ({
-          id: issue.id,
-          title: issue.title,
-          body: issue.body,
-          status: issue.status as IssueStatus,
-          priority: issue.priority as Priority,
-          labels: issue.labels || [],
-          author: issue.author || 'system',
-          authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
-          createdAt: issue.createdAt || new Date().toISOString(),
-          commentCount: issue.commentCount || 0,
-        }));
+        const convertedIssues: Issue[] = issues.map((issue: any) => {
+          // Use initials avatar (unisex) if authorAvatar is the old avataaars style
+          let avatarUrl = issue.authorAvatar;
+          if (!avatarUrl || avatarUrl.includes('avataaars')) {
+            const email = issue.author || 'system';
+            avatarUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(email)}`;
+          }
+          return {
+            id: issue.id,
+            title: issue.title,
+            body: issue.body,
+            status: issue.status as IssueStatus,
+            priority: issue.priority as Priority,
+            labels: issue.labels || [],
+            author: issue.author || 'system',
+            authorAvatar: avatarUrl,
+            createdAt: issue.createdAt || new Date().toISOString(),
+            commentCount: issue.commentCount || 0,
+          };
+        });
         
         // Update the created repo with branches and issues
         setRepositories(prev => prev.map(repo => {
@@ -264,12 +291,19 @@ export function GitProvider({ children }: GitProviderProps) {
     try {
       console.log('GitContext: Creating issue', repoId, title);
       
-      // Call API to create issue
-      const issue = await api.createIssue(repoId, title, body, priority, labels);
+      // Get user email for author
+      const userEmail = currentUser?.email || 'system';
+      // Use initials avatar (unisex) instead of avataaars
+      const avatarUrl = currentUser?.email 
+        ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userEmail)}`
+        : 'https://api.dicebear.com/7.x/initials/svg?seed=system';
+      
+      // Call API to create issue (pass user email)
+      const issue = await api.createIssue(repoId, title, body, priority, labels, userEmail);
       setApiStatus('connected');
       setApiError(null);
       
-      // Update repo with new issue
+      // Update repo with new issue (use user email instead of system)
       setRepositories(prev => prev.map(repo => {
         if (repo.id === repoId) {
           // Convert issue to match Issue type
@@ -280,8 +314,8 @@ export function GitProvider({ children }: GitProviderProps) {
             status: issue.status as IssueStatus,
             priority: issue.priority as Priority,
             labels: issue.labels || [],
-            author: issue.author || 'system',
-            authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
+            author: userEmail, // Use user email instead of 'system'
+            authorAvatar: avatarUrl, // Use initials avatar (unisex)
             createdAt: issue.createdAt || new Date().toISOString(),
             commentCount: issue.commentCount || 0,
           };

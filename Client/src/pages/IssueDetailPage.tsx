@@ -4,6 +4,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer';
 import CommitHistory from '../components/CommitHistory';
 import { ArrowLeft, CircleDot, CheckCircle2, Clock } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
+import { routes } from '../routes';
 
 const priorityColors = {
   low: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
@@ -61,7 +62,7 @@ const IssueDetailPage = () => {
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(`/repo/${repo.id}/issues`)}
+          onClick={() => navigate(routes.dashboardRepoIssues(repo.id))}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
