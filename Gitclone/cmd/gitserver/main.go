@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,6 +173,7 @@ type CreateIssueRequest struct {
 	Body     string  `json:"body"`
 	Priority string  `json:"priority"`
 	Labels   []Label `json:"labels"`
+	Author   string  `json:"author,omitempty"` // Optional: email from frontend
 }
 
 func (s *Server) handleListRepos(w http.ResponseWriter, r *http.Request) {
@@ -870,6 +872,14 @@ func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID
 			return
 		}
 
+		// Get author email from request or default to "system"
+		authorEmail := req.Author
+		if authorEmail == "" {
+			authorEmail = "system"
+		}
+		// Use initials avatar (unisex) instead of avataaars
+		avatarURL := fmt.Sprintf("https://api.dicebear.com/7.x/initials/svg?seed=%s", url.QueryEscape(authorEmail))
+
 		// Create issue
 		issue := Issue{
 			ID:           fmt.Sprintf("%s-%d", repoID, time.Now().UnixNano()),
@@ -878,8 +888,8 @@ func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID
 			Status:       "open",
 			Priority:     req.Priority,
 			Labels:       req.Labels,
-			Author:       "system", // TODO: get from auth
-			AuthorAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=system",
+			Author:       authorEmail,
+			AuthorAvatar: avatarURL,
 			CreatedAt:    time.Now(),
 			CommentCount: 0,
 		}
