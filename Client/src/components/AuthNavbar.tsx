@@ -44,16 +44,15 @@ const AuthNavbar = () => {
 
           {/* Navigation Links - Middle */}
           <div className="flex items-center gap-6">
-            <Link
-              to={routes.dashboard}
-              className={`text-sm font-medium transition-colors ${
-                location.pathname === routes.dashboard
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Dashboard
-            </Link>
+            {/* Only show Dashboard link if not on dashboard page */}
+            {location.pathname !== routes.dashboard && (
+              <Link
+                to={routes.dashboard}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
             
             {isRepoPage && repoId && (
               <>
