@@ -55,7 +55,7 @@ const AuthNavbar = () => {
               Dashboard
             </Link>
             
-            {isRepoPage && (
+            {isRepoPage && repoId && (
               <>
                 <Link
                   to={routes.dashboardRepoIssues(repoId)}

@@ -173,6 +173,11 @@ export const api = {
     });
   },
 
+  async createBranch(repoId: string, branchName: string): Promise<void> {
+    // checkout creates branch if it doesn't exist
+    await this.checkout(repoId, branchName);
+  },
+
   async commit(repoId: string, message: string): Promise<void> {
     await fetchJSON(`/api/repos/${repoId}/commit`, {
       method: 'POST',
