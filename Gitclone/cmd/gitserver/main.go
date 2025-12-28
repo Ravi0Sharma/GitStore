@@ -463,6 +463,7 @@ func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID 
 		// Fast-forward merge - proceed
 	} else {
 		// Check if merge is fast-forward: currentTip must be an ancestor of otherTip
+		// For fast-forward: otherTip must be ahead of currentTip (currentTip is ancestor of otherTip)
 		isFastForward := s.isAncestor(repoPath, opts, *currentTip, *otherTip)
 		if !isFastForward {
 			// Non-fast-forward merge - reject with 409
@@ -766,8 +767,10 @@ func (s *Server) isAncestor(repoPath string, opts storage.InitOptions, commitA, 
 	// If we reach commitA, then commitA is an ancestor of commitB
 	visited := make(map[int]bool)
 	queue := []int{commitB}
+	maxDepth := 1000 // Safety limit to prevent infinite loops
+	depth := 0
 
-	for len(queue) > 0 {
+	for len(queue) > 0 && depth < maxDepth {
 		current := queue[0]
 		queue = queue[1:]
 
@@ -775,6 +778,7 @@ func (s *Server) isAncestor(repoPath string, opts storage.InitOptions, commitA, 
 			continue
 		}
 		visited[current] = true
+		depth++
 
 		if current == commitA {
 			return true
