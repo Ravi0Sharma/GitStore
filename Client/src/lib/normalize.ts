@@ -14,7 +14,7 @@ export function normalizeRepo(repo: RepoListItem): Repository {
   const lastUpdated = repo.lastUpdated || (repo as any).updatedAt || (repo as any).createdAt || undefined;
   
   // Ensure branches and commits are arrays (even if empty)
-  // Backend listRepos doesn't include full branch/commit data, so we use counts
+  // Branches and issues will be loaded separately via API (like issues pattern)
   const branches: Branch[] = [];
   const commits: Commit[] = [];
   
@@ -23,10 +23,10 @@ export function normalizeRepo(repo: RepoListItem): Repository {
     name: repo.name,
     description: repo.description,
     currentBranch: repo.currentBranch || 'master',
-    branches,
+    branches, // Will be populated by loadRepositories fetching branches
     commits,
-    issues: [], // Issues not implemented in backend yet
-    branchCount: repo.branchCount,
+    issues: [], // Will be populated by loadRepositories fetching issues
+    branchCount: repo.branchCount, // Keep for backward compatibility, but use branches.length
     commitCount: repo.commitCount,
     lastUpdated,
   };

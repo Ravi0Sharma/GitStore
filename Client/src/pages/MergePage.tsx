@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
 import { GitMerge, ArrowLeft, ArrowRight, CheckCircle2, XCircle, GitBranch } from 'lucide-react';
@@ -7,13 +7,46 @@ import { routes } from '../routes';
 
 const MergePage = () => {
   const { repoId } = useParams<{ repoId: string }>();
-  const { getRepository, mergeBranches } = useGit();
+  const { getRepository, mergeBranches, loadRepositories, loading } = useGit();
   const navigate = useNavigate();
+  const [isRefetching, setIsRefetching] = useState(false);
   const repo = getRepository(repoId || '');
 
   const [fromBranch, setFromBranch] = useState('');
   const [toBranch, setToBranch] = useState('');
   const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
+
+  // Redirect if no repoId
+  useEffect(() => {
+    if (!repoId) {
+      navigate(routes.dashboard);
+    }
+  }, [repoId, navigate]);
+
+  // Try to refetch if repo not found
+  useEffect(() => {
+    if (repoId && !getRepository(repoId) && !loading && !isRefetching) {
+      setIsRefetching(true);
+      loadRepositories().finally(() => setIsRefetching(false));
+    }
+  }, [repoId, loading, isRefetching]);
+
+  if (!repoId) {
+    return null; // Will redirect
+  }
+
+  if (!repo && (loading || isRefetching)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="container mx-auto px-4 py-8">
+          <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
+            <p className="text-muted-foreground">Loading repository...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!repo) {
     return (
@@ -32,8 +65,27 @@ const MergePage = () => {
 
   const handleMerge = async () => {
     if (fromBranch && toBranch && fromBranch !== toBranch) {
-      const result = await mergeBranches(repo.id, fromBranch, toBranch);
-      setMergeResult(result);
+      setIsMerging(true);
+      setMergeResult(null); // Clear previous result
+      try {
+        const result = await mergeBranches(repo.id, fromBranch, toBranch);
+        setMergeResult(result);
+        
+        // If merge was successful, refresh the repo data to show updated branches/commits
+        if (result.success) {
+          // The mergeBranches function already calls loadRepositories, but we can also
+          // explicitly refresh the current repo view
+          await loadRepositories();
+        }
+      } catch (err) {
+        // This should not happen as mergeBranches catches errors, but just in case
+        setMergeResult({
+          success: false,
+          message: err instanceof Error ? err.message : 'An unexpected error occurred'
+        });
+      } finally {
+        setIsMerging(false);
+      }
     }
   };
 
@@ -81,7 +133,15 @@ const MergePage = () => {
               {mergeResult.success && mergeResult.type === 'fast-forward' && (
                 <div className="mt-3 p-3 bg-card rounded-md border border-border">
                   <p className="text-xs text-muted-foreground">Merge type</p>
-                  <p className="font-mono text-sm text-foreground mt-1">Fast-forward</p>
+                  <p className="font-mono text-sm text-foreground mt-1">Fast-forward merge completed</p>
+                </div>
+              )}
+              {!mergeResult.success && (
+                <div className="mt-3 p-3 bg-card rounded-md border border-border">
+                  <p className="text-xs text-muted-foreground">Note</p>
+                  <p className="text-sm text-foreground mt-1">
+                    No changes were made to the repository. You can try a different merge or navigate away.
+                  </p>
                 </div>
               )}
             </div>
@@ -148,13 +208,13 @@ const MergePage = () => {
             <div className="mt-6 pt-6 border-t border-border">
               <button
                 onClick={handleMerge}
-                disabled={!canMerge}
+                disabled={!canMerge || isMerging}
                 className={`flex items-center gap-2 ${
-                  canMerge ? 'github-btn-primary' : 'bg-muted text-muted-foreground cursor-not-allowed px-4 py-2 rounded-md'
+                  canMerge && !isMerging ? 'github-btn-primary' : 'bg-muted text-muted-foreground cursor-not-allowed px-4 py-2 rounded-md'
                 }`}
               >
                 <GitMerge className="h-4 w-4" />
-                Merge branches
+                {isMerging ? 'Merging...' : 'Merge branches'}
               </button>
             </div>
           </div>

@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
 import IssueCard from '../components/IssueCard';
 import IssueFilters from '../components/IssueFilters';
 import IssueEmptyState from '../components/IssueEmptyState';
 import CreateIssueModal from '../components/CreateIssueModal';
-import Checklist from '../components/Checklist';
 import { ArrowLeft, Plus, CircleDot, CheckCircle2 } from 'lucide-react';
 import { IssueStatus, Label, Priority } from '../types/git';
 import { routes } from '../routes';
@@ -16,14 +15,46 @@ const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 const IssuesPage = () => {
   const { repoId } = useParams<{ repoId: string }>();
-  const { getRepository, createIssue } = useGit();
+  const { getRepository, createIssue, loadRepositories, loading } = useGit();
   const navigate = useNavigate();
+  const [isRefetching, setIsRefetching] = useState(false);
   const repo = getRepository(repoId || '');
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [statusFilter, setStatusFilter] = useState<IssueStatus | 'all'>('all');
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
+
+  // Redirect if no repoId
+  useEffect(() => {
+    if (!repoId) {
+      navigate(routes.dashboard);
+    }
+  }, [repoId, navigate]);
+
+  // Try to refetch if repo not found
+  useEffect(() => {
+    if (repoId && !getRepository(repoId) && !loading && !isRefetching) {
+      setIsRefetching(true);
+      loadRepositories().finally(() => setIsRefetching(false));
+    }
+  }, [repoId, loading, isRefetching]);
+
+  if (!repoId) {
+    return null; // Will redirect
+  }
+
+  if (!repo && (loading || isRefetching)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="container mx-auto px-4 py-8">
+          <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
+            <p className="text-muted-foreground">Loading repository...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!repo) {
     return (
@@ -74,8 +105,14 @@ const IssuesPage = () => {
   const openCount = repo.issues.filter((i) => i.status === 'open').length;
   const closedCount = repo.issues.filter((i) => i.status === 'closed').length;
 
-  const handleCreateIssue = (title: string, body: string, priority: Priority, labels: Label[]) => {
-    createIssue(repo.id, title, body, priority, labels);
+  const handleCreateIssue = async (title: string, body: string, priority: Priority, labels: Label[]) => {
+    try {
+      await createIssue(repo.id, title, body, priority, labels);
+      // Modal will close automatically after successful creation
+    } catch (err) {
+      console.error('Failed to create issue:', err);
+      // Error is already handled in GitContext, but we could show a toast here
+    }
   };
 
   return (
@@ -154,10 +191,6 @@ const IssuesPage = () => {
                   )}
                 </div>
               </div>
-            </div>
-
-            <div className="lg:col-span-1">
-              <Checklist issueId={`repo-${repo.id}`} />
             </div>
           </div>
         )}
