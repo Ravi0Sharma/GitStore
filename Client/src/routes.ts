@@ -16,5 +16,6 @@ export const routes = {
   dashboardRepoIssueDetail: (repoId: string, issueId: string) => `/dashboard/repo/${repoId}/issues/${issueId}`,
   dashboardRepoBranches: (repoId: string) => `/dashboard/repo/${repoId}/branches`,
   dashboardRepoMerge: (repoId: string) => `/dashboard/repo/${repoId}/merge`,
+  dashboardRepoCLI: (repoId: string) => `/dashboard/repo/${repoId}/cli`,
 } as const;
 
