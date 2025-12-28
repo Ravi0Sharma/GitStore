@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
 import IssueCard from '../components/IssueCard';
@@ -16,14 +16,46 @@ const priorityOrder = { high: 0, medium: 1, low: 2 };
 
 const IssuesPage = () => {
   const { repoId } = useParams<{ repoId: string }>();
-  const { getRepository, createIssue } = useGit();
+  const { getRepository, createIssue, loadRepositories, loading } = useGit();
   const navigate = useNavigate();
+  const [isRefetching, setIsRefetching] = useState(false);
   const repo = getRepository(repoId || '');
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [statusFilter, setStatusFilter] = useState<IssueStatus | 'all'>('all');
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
+
+  // Redirect if no repoId
+  useEffect(() => {
+    if (!repoId) {
+      navigate(routes.dashboard);
+    }
+  }, [repoId, navigate]);
+
+  // Try to refetch if repo not found
+  useEffect(() => {
+    if (repoId && !getRepository(repoId) && !loading && !isRefetching) {
+      setIsRefetching(true);
+      loadRepositories().finally(() => setIsRefetching(false));
+    }
+  }, [repoId, loading, isRefetching]);
+
+  if (!repoId) {
+    return null; // Will redirect
+  }
+
+  if (!repo && (loading || isRefetching)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="container mx-auto px-4 py-8">
+          <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
+            <p className="text-muted-foreground">Loading repository...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!repo) {
     return (

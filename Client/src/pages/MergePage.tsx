@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
 import { GitMerge, ArrowLeft, ArrowRight, CheckCircle2, XCircle, GitBranch } from 'lucide-react';
@@ -7,13 +7,45 @@ import { routes } from '../routes';
 
 const MergePage = () => {
   const { repoId } = useParams<{ repoId: string }>();
-  const { getRepository, mergeBranches } = useGit();
+  const { getRepository, mergeBranches, loadRepositories, loading } = useGit();
   const navigate = useNavigate();
+  const [isRefetching, setIsRefetching] = useState(false);
   const repo = getRepository(repoId || '');
 
   const [fromBranch, setFromBranch] = useState('');
   const [toBranch, setToBranch] = useState('');
   const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
+
+  // Redirect if no repoId
+  useEffect(() => {
+    if (!repoId) {
+      navigate(routes.dashboard);
+    }
+  }, [repoId, navigate]);
+
+  // Try to refetch if repo not found
+  useEffect(() => {
+    if (repoId && !getRepository(repoId) && !loading && !isRefetching) {
+      setIsRefetching(true);
+      loadRepositories().finally(() => setIsRefetching(false));
+    }
+  }, [repoId, loading, isRefetching]);
+
+  if (!repoId) {
+    return null; // Will redirect
+  }
+
+  if (!repo && (loading || isRefetching)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="container mx-auto px-4 py-8">
+          <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
+            <p className="text-muted-foreground">Loading repository...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!repo) {
     return (

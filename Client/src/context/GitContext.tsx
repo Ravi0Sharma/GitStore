@@ -15,6 +15,7 @@ interface GitContextType {
   createBranch: (repoId: string, branchName: string) => Promise<void>;
   switchBranch: (repoId: string, branchName: string) => Promise<void>;
   mergeBranches: (repoId: string, fromBranch: string, toBranch: string) => Promise<MergeResult>;
+  loadRepositories: (skipEmptyGuard?: boolean) => Promise<void>;
   loading: boolean;
   error: string | null;
   apiStatus: 'unknown' | 'connected' | 'disconnected' | 'error';
@@ -36,6 +37,7 @@ const PLACEHOLDER_GIT_CONTEXT: GitContextType = {
   createBranch: async () => {},
   switchBranch: async () => {},
   mergeBranches: async () => Promise.resolve({ success: false, message: 'Git functionality not available' }),
+  loadRepositories: async () => {},
   loading: false,
   error: null,
   apiStatus: 'unknown',
@@ -205,74 +207,52 @@ export function GitProvider({ children }: GitProviderProps) {
     try {
       console.log('GitContext: Creating branch', repoId, branchName);
       
-      // Try API first
-      let apiWorked = false;
+      // Call API to create branch
+      await api.createBranch(repoId, branchName);
+      setApiStatus('connected');
+      setApiError(null);
+      
+      // Reload branches from API
       try {
-        await api.checkout(repoId, branchName);
-        apiWorked = true;
-        setApiStatus('connected');
-        setApiError(null);
-      } catch (apiErr) {
-        const errorMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
-        if (errorMsg.includes('Failed to reach API') || errorMsg.includes('HTML instead of JSON')) {
-          console.warn('GitContext: API not available, creating branch locally only');
-          setApiStatus('disconnected');
-          setApiError(errorMsg);
-          // Continue with local-only update
-        } else {
-          throw apiErr;
-        }
-      }
-      
-      // Optimistic update: Add branch immediately
-      setRepositories(prev => prev.map(repo => {
-        if (repo.id === repoId) {
-          // Check if branch already exists
-          if (repo.branches.some(b => b.name === branchName)) {
-            console.log('GitContext: Branch already exists in state');
-            return repo;
-          }
-          console.log('GitContext: Adding branch optimistically', branchName);
-          return {
-            ...repo,
-            branches: [...repo.branches, { name: branchName, createdAt: new Date() }],
-          };
-        }
-        return repo;
-      }));
-      
-      // Only reload if API worked
-      if (apiWorked) {
-        // Wait a bit for server to be ready
-        await new Promise(resolve => setTimeout(resolve, 300));
+        const branches = await api.getBranches(repoId);
+        const branchDates = branches.map(b => ({
+          name: b.name,
+          createdAt: new Date(b.createdAt),
+        }));
         
-        try {
-          // Then reload to get accurate data (with guard)
-          const repoList = await api.listRepos();
-          console.log('GitContext: After createBranch, listRepos returned', repoList.length, 'repos');
-          
-          if (repoList.length > 0) {
-            await loadRepositories(true); // skipEmptyGuard = true
-          } else {
-            console.warn('GitContext: listRepos returned empty after createBranch, keeping optimistic state');
+        // Update repo with new branches
+        setRepositories(prev => prev.map(repo => {
+          if (repo.id === repoId) {
+            return {
+              ...repo,
+              branches: branchDates,
+            };
           }
-        } catch (reloadErr) {
-          console.warn('GitContext: Failed to reload after createBranch, keeping optimistic state');
-        }
+          return repo;
+        }));
+      } catch (reloadErr) {
+        console.warn('GitContext: Failed to reload branches after create, using optimistic update:', reloadErr);
+        // Optimistic update as fallback
+        setRepositories(prev => prev.map(repo => {
+          if (repo.id === repoId) {
+            if (repo.branches.some(b => b.name === branchName)) {
+              return repo;
+            }
+            return {
+              ...repo,
+              branches: [...repo.branches, { name: branchName, createdAt: new Date() }],
+            };
+          }
+          return repo;
+        }));
       }
+      
       console.log('GitContext: Branch creation completed');
     } catch (err) {
       console.error('Failed to create branch:', err);
-      // Revert optimistic update on error
-      setRepositories(prev => prev.map(repo => {
-        if (repo.id === repoId) {
-          return {
-            ...repo,
-            branches: repo.branches.filter(b => b.name !== branchName),
-          };
-        }
-        return repo;
-      }));
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setApiStatus('error');
+      setApiError(errorMsg);
       throw err;
     }
   };
@@ -364,6 +344,7 @@ export function GitProvider({ children }: GitProviderProps) {
     createBranch,
     switchBranch,
     mergeBranches,
+    loadRepositories,
     loading,
     error,
     apiStatus,
