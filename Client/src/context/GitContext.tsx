@@ -1,5 +1,5 @@
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
-import { Repository, Issue, Priority, Label, MergeResult } from '../types/git';
+import { Repository, Issue, Priority, Label, MergeResult, IssueStatus } from '../types/git';
 import { api, Repository as APIRepository } from '../lib/api';
 import { convertAPIRepo } from '../lib/repoConverters';
 import { normalizeRepos, normalizeRepo, mergeById } from '../lib/normalize';
@@ -111,9 +111,52 @@ export function GitProvider({ children }: GitProviderProps) {
       // Normalize repos from list (no need to load full details - list has all we need)
       const repos = normalizeRepos(repoList);
       
-      console.log('GitContext: Setting repositories', repos.length, 'repos (isInitialLoad:', isInitialLoad, ')');
-      console.log('GitContext: Repo IDs to set:', repos.map(r => r.id));
-      setRepositories(repos);
+      // Load branches and issues for each repo (similar to issues pattern)
+      const reposWithData = await Promise.all(
+        repos.map(async (repo) => {
+          try {
+            // Load branches
+            const branches = await api.getBranches(repo.id);
+            const branchDates = branches.map(b => ({
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            }));
+            
+            // Load issues
+            const issues = await api.getIssues(repo.id);
+            const convertedIssues: Issue[] = issues.map((issue: any) => ({
+              id: issue.id,
+              title: issue.title,
+              body: issue.body,
+              status: issue.status as IssueStatus,
+              priority: issue.priority as Priority,
+              labels: issue.labels || [],
+              author: issue.author || 'system',
+              authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
+              createdAt: issue.createdAt || new Date().toISOString(),
+              commentCount: issue.commentCount || 0,
+            }));
+            
+            return {
+              ...repo,
+              branches: branchDates,
+              issues: convertedIssues,
+            };
+          } catch (err) {
+            console.warn(`GitContext: Failed to load branches/issues for ${repo.id}:`, err);
+            // Return repo with empty arrays if fetch fails
+            return {
+              ...repo,
+              branches: [],
+              issues: [],
+            };
+          }
+        })
+      );
+      
+      console.log('GitContext: Setting repositories', reposWithData.length, 'repos (isInitialLoad:', isInitialLoad, ')');
+      console.log('GitContext: Repo IDs to set:', reposWithData.map(r => r.id));
+      setRepositories(reposWithData);
       console.log('GitContext: Repositories state updated');
       setIsInitialLoad(false);
       setPendingOptimisticRepo(null);
@@ -157,16 +200,45 @@ export function GitProvider({ children }: GitProviderProps) {
       const normalized = normalizeRepo(created);
       setRepositories(prev => mergeById(prev, normalized));
       
-      // Optionally reload to sync (but don't overwrite with empty)
+      // Load branches and issues for the new repo (same pattern as loadRepositories)
       try {
         await new Promise(resolve => setTimeout(resolve, 300));
-        const repoList = await api.listRepos();
-        if (repoList.length > 0) {
-          const repos = normalizeRepos(repoList);
-          setRepositories(repos);
-        }
+        
+        // Load branches
+        const branches = await api.getBranches(created.id);
+        const branchDates = branches.map(b => ({
+          name: b.name,
+          createdAt: new Date(b.createdAt),
+        }));
+        
+        // Load issues
+        const issues = await api.getIssues(created.id);
+        const convertedIssues: Issue[] = issues.map((issue: any) => ({
+          id: issue.id,
+          title: issue.title,
+          body: issue.body,
+          status: issue.status as IssueStatus,
+          priority: issue.priority as Priority,
+          labels: issue.labels || [],
+          author: issue.author || 'system',
+          authorAvatar: issue.authorAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=system',
+          createdAt: issue.createdAt || new Date().toISOString(),
+          commentCount: issue.commentCount || 0,
+        }));
+        
+        // Update the created repo with branches and issues
+        setRepositories(prev => prev.map(repo => {
+          if (repo.id === created.id) {
+            return {
+              ...repo,
+              branches: branchDates,
+              issues: convertedIssues,
+            };
+          }
+          return repo;
+        }));
       } catch (reloadErr) {
-        console.warn('GitContext: Failed to reload after create, keeping optimistic state:', reloadErr);
+        console.warn('GitContext: Failed to reload branches/issues after create, keeping optimistic state:', reloadErr);
         // Keep the created repo in state
       }
       
@@ -250,7 +322,7 @@ export function GitProvider({ children }: GitProviderProps) {
       setApiStatus('connected');
       setApiError(null);
       
-      // Reload branches from API
+      // Reload branches from API (same pattern as issues)
       try {
         const branches = await api.getBranches(repoId);
         const branchDates = branches.map(b => ({
@@ -258,12 +330,12 @@ export function GitProvider({ children }: GitProviderProps) {
           createdAt: new Date(b.createdAt),
         }));
         
-        // Update repo with new branches
+        // Update repo with new branches (ensuring we have all branches including default)
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
             return {
               ...repo,
-              branches: branchDates,
+              branches: branchDates, // Use fetched branches (includes default branch)
             };
           }
           return repo;
@@ -273,9 +345,11 @@ export function GitProvider({ children }: GitProviderProps) {
         // Optimistic update as fallback
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
+            // Check if branch already exists
             if (repo.branches.some(b => b.name === branchName)) {
               return repo;
             }
+            // Add new branch to existing branches
             return {
               ...repo,
               branches: [...repo.branches, { name: branchName, createdAt: new Date() }],
@@ -364,8 +438,29 @@ export function GitProvider({ children }: GitProviderProps) {
       // Then merge fromBranch into toBranch
       const mergeResponse = await api.merge(repoId, fromBranch);
       
-      // Only reload state on successful merge
-      await loadRepositories();
+      // Reload branches and repos after successful merge (branches might have changed)
+      try {
+        const branches = await api.getBranches(repoId);
+        const branchDates = branches.map(b => ({
+          name: b.name,
+          createdAt: new Date(b.createdAt),
+        }));
+        
+        // Update repo with refreshed branches
+        setRepositories(prev => prev.map(repo => {
+          if (repo.id === repoId) {
+            return {
+              ...repo,
+              branches: branchDates,
+              currentBranch: toBranch, // Update current branch after checkout
+            };
+          }
+          return repo;
+        }));
+      } catch (reloadErr) {
+        console.warn('GitContext: Failed to reload branches after merge, reloading all repos:', reloadErr);
+        await loadRepositories();
+      }
       
       // Determine merge type from response or default to fast-forward
       const mergeType = mergeResponse.type === 'fast-forward' ? 'fast-forward' : 'fast-forward';

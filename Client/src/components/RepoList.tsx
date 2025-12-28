@@ -145,8 +145,8 @@ const RepoList = () => {
           </div>
         )}
         {!loading && repositories.length > 0 && repositories.map((repo) => {
-          // Use branchCount from backend if available, otherwise use branches.length
-          const branchCount = repo.branchCount ?? repo.branches?.length ?? 0;
+          // Use branches.length (branches are loaded from API, includes default branch)
+          const branchCount = repo.branches?.length ?? 0;
           // Use lastUpdated from backend for "updated" display
           const lastUpdated = repo.lastUpdated;
           
