@@ -148,6 +148,32 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+type Issue struct {
+	ID           string    `json:"id"`
+	Title        string    `json:"title"`
+	Body         string    `json:"body"`
+	Status       string    `json:"status"`   // "open" or "closed"
+	Priority     string    `json:"priority"` // "low", "medium", "high"
+	Labels       []Label   `json:"labels"`
+	Author       string    `json:"author"`
+	AuthorAvatar string    `json:"authorAvatar"`
+	CreatedAt    time.Time `json:"createdAt"`
+	CommentCount int       `json:"commentCount"`
+}
+
+type Label struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+type CreateIssueRequest struct {
+	Title    string  `json:"title"`
+	Body     string  `json:"body"`
+	Priority string  `json:"priority"`
+	Labels   []Label `json:"labels"`
+}
+
 func (s *Server) handleListRepos(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		log.Printf("GET /api/repos - Loading repos from metadata store")
@@ -236,6 +262,8 @@ func (s *Server) handleRepoRoutes(w http.ResponseWriter, r *http.Request) {
 		s.handleRepoCommit(w, r, repoID)
 	case "merge":
 		s.handleRepoMerge(w, r, repoID)
+	case "issues":
+		s.handleRepoIssues(w, r, repoID)
 	default:
 		http.Error(w, "Invalid endpoint", http.StatusNotFound)
 	}
@@ -689,6 +717,13 @@ func (s *Server) loadRepo(repoPath, repoID string) (Repository, error) {
 	currentBranch, _ := storage.ReadHEADBranch(repoPath, opts)
 	branches, _ := s.loadBranches(repoPath)
 	commits, _ := s.loadCommits(repoPath)
+	issues, _ := s.loadIssues(repoID)
+
+	// Convert issues to []interface{} for Repository struct
+	issuesInterface := make([]interface{}, len(issues))
+	for i, issue := range issues {
+		issuesInterface[i] = issue
+	}
 
 	return Repository{
 		ID:            repoID,
@@ -696,7 +731,7 @@ func (s *Server) loadRepo(repoPath, repoID string) (Repository, error) {
 		CurrentBranch: currentBranch,
 		Branches:      branches,
 		Commits:       commits,
-		Issues:        []interface{}{}, // Issues not implemented
+		Issues:        issuesInterface,
 	}, nil
 }
 
@@ -799,6 +834,111 @@ func (s *Server) isAncestor(repoPath string, opts storage.InitOptions, commitA, 
 	}
 
 	return false
+}
+
+func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID string) {
+	repoPath := filepath.Join(s.repoBase, repoID)
+	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		// Get all issues for the repo
+		issues, err := s.loadIssues(repoID)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+		respondJSON(w, http.StatusOK, issues)
+	} else if r.Method == http.MethodPost {
+		// Create a new issue
+		var req CreateIssueRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+			return
+		}
+
+		if req.Title == "" {
+			respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Issue title is required"})
+			return
+		}
+
+		// Create issue
+		issue := Issue{
+			ID:           fmt.Sprintf("%s-%d", repoID, time.Now().UnixNano()),
+			Title:        req.Title,
+			Body:         req.Body,
+			Status:       "open",
+			Priority:     req.Priority,
+			Labels:       req.Labels,
+			Author:       "system", // TODO: get from auth
+			AuthorAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=system",
+			CreatedAt:    time.Now(),
+			CommentCount: 0,
+		}
+
+		// Save issue
+		if err := s.saveIssue(repoID, issue); err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		respondJSON(w, http.StatusCreated, issue)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) loadIssues(repoID string) ([]Issue, error) {
+	// Use metadata store's db directly
+	db := s.metaStore.GetDB()
+	if db == nil {
+		return []Issue{}, nil
+	}
+
+	key := fmt.Sprintf("repo:%s:issues", repoID)
+	data, err := db.Get(key)
+	if err != nil {
+		// No issues yet, return empty array
+		return []Issue{}, nil
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(data, &issues); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal issues: %w", err)
+	}
+
+	return issues, nil
+}
+
+func (s *Server) saveIssue(repoID string, issue Issue) error {
+	// Load existing issues
+	issues, err := s.loadIssues(repoID)
+	if err != nil {
+		return err
+	}
+
+	// Add new issue
+	issues = append(issues, issue)
+
+	// Save back using metadata store's db
+	db := s.metaStore.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not available")
+	}
+
+	key := fmt.Sprintf("repo:%s:issues", repoID)
+	data, err := json.Marshal(issues)
+	if err != nil {
+		return fmt.Errorf("failed to marshal issues: %w", err)
+	}
+
+	if err := db.Put(key, data); err != nil {
+		return fmt.Errorf("failed to save issues: %w", err)
+	}
+
+	return nil
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {

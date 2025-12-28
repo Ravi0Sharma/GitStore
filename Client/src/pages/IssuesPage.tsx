@@ -106,8 +106,14 @@ const IssuesPage = () => {
   const openCount = repo.issues.filter((i) => i.status === 'open').length;
   const closedCount = repo.issues.filter((i) => i.status === 'closed').length;
 
-  const handleCreateIssue = (title: string, body: string, priority: Priority, labels: Label[]) => {
-    createIssue(repo.id, title, body, priority, labels);
+  const handleCreateIssue = async (title: string, body: string, priority: Priority, labels: Label[]) => {
+    try {
+      await createIssue(repo.id, title, body, priority, labels);
+      // Modal will close automatically after successful creation
+    } catch (err) {
+      console.error('Failed to create issue:', err);
+      // Error is already handled in GitContext, but we could show a toast here
+    }
   };
 
   return (

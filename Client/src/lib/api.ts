@@ -191,5 +191,16 @@ export const api = {
       body: JSON.stringify({ branch }),
     });
   },
+
+  async createIssue(repoId: string, title: string, body: string, priority: string, labels: any[]): Promise<any> {
+    return fetchJSON<any>(`/api/repos/${repoId}/issues`, {
+      method: 'POST',
+      body: JSON.stringify({ title, body, priority, labels }),
+    });
+  },
+
+  async getIssues(repoId: string): Promise<any[]> {
+    return fetchJSON<any[]>(`/api/repos/${repoId}/issues`);
+  },
 };
 
