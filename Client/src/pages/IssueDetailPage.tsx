@@ -49,8 +49,12 @@ const IssueDetailPage = () => {
     );
   }
 
-  const handleStatusToggle = () => {
-    toggleIssueStatus(repo.id, issue.id);
+  const handleStatusToggle = async () => {
+    try {
+      await toggleIssueStatus(repo.id, issue.id);
+    } catch (err) {
+      console.error('Failed to toggle issue status:', err);
+    }
   };
 
   return (

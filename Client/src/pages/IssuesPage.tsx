@@ -5,7 +5,6 @@ import IssueCard from '../components/IssueCard';
 import IssueFilters from '../components/IssueFilters';
 import IssueEmptyState from '../components/IssueEmptyState';
 import CreateIssueModal from '../components/CreateIssueModal';
-import Checklist from '../components/Checklist';
 import { ArrowLeft, Plus, CircleDot, CheckCircle2 } from 'lucide-react';
 import { IssueStatus, Label, Priority } from '../types/git';
 import { routes } from '../routes';
@@ -192,10 +191,6 @@ const IssuesPage = () => {
                   )}
                 </div>
               </div>
-            </div>
-
-            <div className="lg:col-span-1">
-              <Checklist issueId={`repo-${repo.id}`} />
             </div>
           </div>
         )}

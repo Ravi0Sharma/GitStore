@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BookMarked, GitBranch, Plus, Star } from 'lucide-react';
+import { BookMarked, GitBranch, Plus } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
 import { routes } from '../routes';
 import { useGit } from '../context/GitContext';
@@ -39,15 +39,15 @@ const RepoList = () => {
   };
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-900 rounded-t-lg">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+    <div className="bg-secondary/30 rounded-lg border border-border/50">
+      <div className="p-4 border-b border-border/50 flex items-center justify-between bg-secondary/30 rounded-t-lg">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
           <BookMarked className="h-5 w-5" />
           Repositories
         </h2>
         <button
           onClick={() => setShowNewRepoForm(!showNewRepoForm)}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors"
         >
           <Plus className="h-4 w-4" />
           New
@@ -55,10 +55,10 @@ const RepoList = () => {
       </div>
 
       {showNewRepoForm && (
-        <form onSubmit={handleCreateRepo} className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <form onSubmit={handleCreateRepo} className="p-4 border-b border-border/50 bg-secondary/20">
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Repository name
               </label>
               <input
@@ -66,20 +66,20 @@ const RepoList = () => {
                 value={newRepoName}
                 onChange={(e) => setNewRepoName(e.target.value)}
                 placeholder="my-awesome-project"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-border/50 rounded-md bg-background/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40"
                 autoFocus
                 disabled={isCreating}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description <span className="text-gray-500 dark:text-gray-400">(optional)</span>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Description <span className="text-muted-foreground">(optional)</span>
               </label>
               <textarea
                 value={newRepoDesc}
                 onChange={(e) => setNewRepoDesc(e.target.value)}
                 placeholder="A short description of your repository"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full px-3 py-2 border border-border/50 rounded-md bg-background/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 resize-none"
                 rows={2}
                 disabled={isCreating}
               />
@@ -88,7 +88,7 @@ const RepoList = () => {
               <button 
                 type="submit" 
                 disabled={isCreating || !newRepoName.trim()}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                className="bg-primary hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors"
               >
                 {isCreating ? 'Creating...' : 'Create repository'}
               </button>
@@ -100,7 +100,7 @@ const RepoList = () => {
                   setNewRepoDesc('');
                 }}
                 disabled={isCreating}
-                className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                className="bg-background/50 hover:bg-background/70 text-foreground border border-border/50 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -138,9 +138,9 @@ const RepoList = () => {
         </div>
       )}
 
-      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+      <div className="divide-y divide-border/50">
         {loading && (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-8 text-center text-muted-foreground">
             <p>Loading repositories...</p>
           </div>
         )}
@@ -154,17 +154,17 @@ const RepoList = () => {
             <Link
               key={repo.id}
               to={routes.dashboardRepo(repo.id)}
-              className="block p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors bg-white dark:bg-gray-900"
+              className="block p-4 hover:bg-secondary/30 transition-colors bg-secondary/30"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h3 className="text-base font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                  <h3 className="text-base font-semibold text-foreground hover:text-primary transition-colors">
                     {repo.name || repo.id}
                   </h3>
                   {repo.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{repo.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{repo.description}</p>
                   )}
-                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <GitBranch className="h-3.5 w-3.5" />
                       {branchCount} {branchCount === 1 ? 'branch' : 'branches'}
@@ -176,25 +176,16 @@ const RepoList = () => {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    // Star functionality placeholder
-                  }}
-                  className="text-gray-400 hover:text-yellow-500 dark:hover:text-yellow-400 transition-colors p-1"
-                >
-                  <Star className="h-4 w-4" />
-                </button>
               </div>
             </Link>
           );
         })}
         {!loading && repositories.length === 0 && (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900">
+          <div className="p-8 text-center text-muted-foreground bg-secondary/30">
             <BookMarked className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No repositories yet. Create your first one!</p>
             {apiStatus === 'disconnected' && (
-              <p className="text-xs mt-2 text-yellow-600 dark:text-yellow-400">
+              <p className="text-xs mt-2 text-yellow-500 dark:text-yellow-400">
                 Note: Repositories created without backend will only be stored locally.
               </p>
             )}

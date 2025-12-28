@@ -117,7 +117,7 @@ const RepoPage = () => {
           </Link>
         </div>
 
-        <div className="github-card mb-6">
+        <div className="bg-secondary/50 rounded-lg border border-border shadow-md mb-6">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -137,8 +137,8 @@ const RepoPage = () => {
             {repo.branches.map((branch) => (
               <div
                 key={branch.name}
-                className={`p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors cursor-pointer ${
-                  branch.name === repo.currentBranch ? 'bg-secondary/50' : ''
+                className={`p-4 flex items-center justify-between hover:bg-secondary/60 transition-colors cursor-pointer ${
+                  branch.name === repo.currentBranch ? 'bg-secondary/70' : ''
                 }`}
                 onClick={() => switchBranch(repo.id, branch.name)}
               >
@@ -161,7 +161,7 @@ const RepoPage = () => {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm">
+        <div className="rounded-2xl border border-border bg-secondary/50 shadow-md">
           <div className="p-4 border-b border-border/50">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
