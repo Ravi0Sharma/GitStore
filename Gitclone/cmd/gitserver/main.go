@@ -415,6 +415,62 @@ func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID 
 		return
 	}
 
+	opts := storage.InitOptions{Bare: false}
+
+	// Read current branch from HEAD
+	currentBranch, err := storage.ReadHEADBranch(repoPath, opts)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// Cannot merge a branch into itself
+	if currentBranch == req.Branch {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Cannot merge a branch into itself"})
+		return
+	}
+
+	// Ensure both refs exist
+	if err := storage.EnsureHeadRefExists(repoPath, opts, currentBranch); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	if err := storage.EnsureHeadRefExists(repoPath, opts, req.Branch); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// Read latest commit of both branches
+	currentTip, err := storage.ReadHeadRefMaybe(repoPath, opts, currentBranch)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	otherTip, err := storage.ReadHeadRefMaybe(repoPath, opts, req.Branch)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// If other branch has no commit, nothing to merge
+	if otherTip == nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: fmt.Sprintf("Nothing to merge: branch %s has no commits", req.Branch)})
+		return
+	}
+
+	// If current branch has no commits, it's a fast-forward
+	if currentTip == nil {
+		// Fast-forward merge - proceed
+	} else {
+		// Check if merge is fast-forward: currentTip must be an ancestor of otherTip
+		isFastForward := s.isAncestor(repoPath, opts, *currentTip, *otherTip)
+		if !isFastForward {
+			// Non-fast-forward merge - reject with 409
+			respondJSON(w, http.StatusConflict, ErrorResponse{Error: "Non-fast-forward merge is not allowed"})
+			return
+		}
+	}
+
 	// Change to repo directory temporarily
 	oldDir, err := os.Getwd()
 	if err != nil {
@@ -428,10 +484,23 @@ func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID 
 		return
 	}
 
-	// Call merge command
+	// Call merge command (this will perform the fast-forward merge)
 	commands.Merge([]string{req.Branch})
 
-	respondJSON(w, http.StatusOK, map[string]string{"message": "Merge completed successfully"})
+	// Update metadata: refresh branch count and commit count
+	meta, err := s.metaStore.GetRepo(repoID)
+	if err == nil {
+		branches, _ := s.loadBranches(repoPath)
+		commits, _ := s.loadCommits(repoPath)
+		meta.BranchCount = len(branches)
+		meta.CommitCount = len(commits)
+		meta.UpdatedAt = time.Now()
+		if err := s.metaStore.UpdateRepo(*meta); err != nil {
+			log.Printf("Warning: failed to update metadata after merge: %v", err)
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Fast-forward merge completed successfully", "type": "fast-forward"})
 }
 
 func (s *Server) handleCreateRepo(w http.ResponseWriter, r *http.Request) {
@@ -684,6 +753,48 @@ func (s *Server) loadCommits(repoPath string) ([]Commit, error) {
 	}
 
 	return commits, nil
+}
+
+// isAncestor checks if commitA is an ancestor of commitB (i.e., commitA is reachable from commitB)
+func (s *Server) isAncestor(repoPath string, opts storage.InitOptions, commitA, commitB int) bool {
+	// If they're the same, it's trivially an ancestor
+	if commitA == commitB {
+		return true
+	}
+
+	// Walk backwards from commitB following parent pointers
+	// If we reach commitA, then commitA is an ancestor of commitB
+	visited := make(map[int]bool)
+	queue := []int{commitB}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if visited[current] {
+			continue
+		}
+		visited[current] = true
+
+		if current == commitA {
+			return true
+		}
+
+		// Read commit and add parents to queue
+		commit, err := storage.ReadCommitObject(repoPath, opts, current)
+		if err != nil {
+			// If we can't read the commit, stop searching
+			break
+		}
+
+		if commit.Parent != nil {
+			queue = append(queue, *commit.Parent)
+		}
+		// Note: We only follow Parent, not Parent2, for fast-forward detection
+		// Parent2 would be from a previous merge, which breaks the linear history
+	}
+
+	return false
 }
 
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
