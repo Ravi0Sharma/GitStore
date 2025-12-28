@@ -12,6 +12,19 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: true
-  }
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        // If backend is not running, proxy will fail gracefully
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('Vite proxy error (backend may not be running):', err.message);
+          });
+        },
+      },
+    },
+  },
 })

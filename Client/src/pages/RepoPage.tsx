@@ -11,6 +11,7 @@ import {
   CircleDot
 } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
+import { routes } from '../routes';
 
 
 const RepoPage = () => {
@@ -21,26 +22,23 @@ const RepoPage = () => {
 
   if (!repo) {
     return (
-      <div className="min-h-screen bg-background">
-        <main className="container mx-auto px-4 py-8">
-          <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
-            <p className="text-muted-foreground">Repository not found. Please select a repository from the dashboard.</p>
-            <Link to="/dashboard" className="text-accent hover:text-accent/80 mt-4 inline-block">
-              ← Back to dashboard
-            </Link>
-          </div>
-        </main>
-      </div>
+      <main className="container mx-auto px-4 py-8">
+        <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
+          <p className="text-muted-foreground">Repository not found. Please select a repository from the dashboard.</p>
+          <Link to={routes.dashboard} className="text-accent hover:text-accent/80 mt-4 inline-block">
+            ← Back to dashboard
+          </Link>
+        </div>
+      </main>
     );
   }
 
   const latestCommit = repo.commits && repo.commits.length > 0 ? repo.commits[repo.commits.length - 1] : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate(routes.dashboard)}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -59,7 +57,7 @@ const RepoPage = () => {
 
         <div className="flex flex-wrap gap-3 mb-6">
           <Link
-            to={`/repo/${repo.id}/issues`}
+            to={routes.dashboardRepoIssues(repo.id)}
             className="github-btn-secondary flex items-center gap-2"
           >
             <CircleDot className="h-4 w-4" />
@@ -69,7 +67,7 @@ const RepoPage = () => {
             </span>
           </Link>
           <Link
-            to={`/repo/${repo.id}/branches`}
+            to={routes.dashboardRepoBranches(repo.id)}
             className="github-btn-secondary flex items-center gap-2"
           >
             <GitBranch className="h-4 w-4" />
@@ -79,7 +77,7 @@ const RepoPage = () => {
             </span>
           </Link>
           <Link
-            to={`/repo/${repo.id}/merge`}
+            to={routes.dashboardRepoMerge(repo.id)}
             className="github-btn-secondary flex items-center gap-2"
           >
             <GitMerge className="h-4 w-4" />
@@ -161,7 +159,6 @@ const RepoPage = () => {
           </div>
         </div>
       </main>
-    </div>
   );
 };
 

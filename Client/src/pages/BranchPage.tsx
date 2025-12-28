@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGit } from '../context/GitContext';
 import { GitBranch, Plus, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
+import { routes } from '../routes';
 
 const BranchPage = () => {
   const { repoId } = useParams<{ repoId: string }>();
@@ -20,7 +21,7 @@ const BranchPage = () => {
         <main className="container mx-auto px-4 py-8">
           <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
             <p className="text-muted-foreground">Repository not found. Please select a repository from the dashboard.</p>
-            <Link to="/dashboard" className="text-accent hover:text-accent/80 mt-4 inline-block">
+            <Link to={routes.dashboard} className="text-accent hover:text-accent/80 mt-4 inline-block">
               ← Back to dashboard
             </Link>
           </div>
@@ -29,21 +30,30 @@ const BranchPage = () => {
     );
   }
 
-  const handleCreateBranch = (e: React.FormEvent) => {
+  const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newBranchName.trim()) {
-      const branchExists = repo.branches.some((b) => b.name === newBranchName.trim());
-      if (branchExists) {
-        setSuccessMessage('Branch already exists');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        return;
-      }
-      
-      createBranch(repo.id, newBranchName.trim());
-      setSuccessMessage(`Branch '${newBranchName.trim()}' created successfully!`);
+    if (!newBranchName.trim()) {
+      return;
+    }
+
+    const branchName = newBranchName.trim();
+    const branchExists = repo.branches.some((b) => b.name === branchName);
+    if (branchExists) {
+      setSuccessMessage('Branch already exists');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      return;
+    }
+    
+    try {
+      await createBranch(repo.id, branchName);
+      setSuccessMessage(`Branch '${branchName}' created successfully!`);
       setNewBranchName('');
       setShowNewBranchForm(false);
       setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create branch';
+      setSuccessMessage(`Error: ${errorMessage}`);
+      setTimeout(() => setSuccessMessage(''), 5000);
     }
   };
 
@@ -51,7 +61,7 @@ const BranchPage = () => {
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(`/repo/${repo.id}`)}
+          onClick={() => navigate(routes.dashboardRepo(repo.id))}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

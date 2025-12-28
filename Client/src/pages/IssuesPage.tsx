@@ -8,6 +8,7 @@ import CreateIssueModal from '../components/CreateIssueModal';
 import Checklist from '../components/Checklist';
 import { ArrowLeft, Plus, CircleDot, CheckCircle2 } from 'lucide-react';
 import { IssueStatus, Label, Priority } from '../types/git';
+import { routes } from '../routes';
 
 type SortOption = 'priority' | 'newest' | 'oldest';
 
@@ -30,7 +31,7 @@ const IssuesPage = () => {
         <main className="container mx-auto px-4 py-8">
           <div className="rounded-2xl border border-border/50 bg-secondary/30 backdrop-blur-sm p-8 text-center">
             <p className="text-muted-foreground">Repository not found. Please select a repository from the dashboard.</p>
-            <Link to="/dashboard" className="text-accent hover:text-accent/80 mt-4 inline-block">
+            <Link to={routes.dashboard} className="text-accent hover:text-accent/80 mt-4 inline-block">
               ← Back to dashboard
             </Link>
           </div>
@@ -81,7 +82,7 @@ const IssuesPage = () => {
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(`/repo/${repo.id}`)}
+          onClick={() => navigate(routes.dashboardRepo(repo.id))}
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
