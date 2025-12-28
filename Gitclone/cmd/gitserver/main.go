@@ -263,7 +263,13 @@ func (s *Server) handleRepoRoutes(w http.ResponseWriter, r *http.Request) {
 	case "merge":
 		s.handleRepoMerge(w, r, repoID)
 	case "issues":
-		s.handleRepoIssues(w, r, repoID)
+		// Check if it's a specific issue operation (e.g., /api/repos/:id/issues/:issueId)
+		if len(parts) >= 3 && parts[2] != "" {
+			issueID := parts[2]
+			s.handleIssue(w, r, repoID, issueID)
+		} else {
+			s.handleRepoIssues(w, r, repoID)
+		}
 	default:
 		http.Error(w, "Invalid endpoint", http.StatusNotFound)
 	}
@@ -885,6 +891,101 @@ func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID
 		}
 
 		respondJSON(w, http.StatusCreated, issue)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleIssue(w http.ResponseWriter, r *http.Request, repoID, issueID string) {
+	repoPath := filepath.Join(s.repoBase, repoID)
+	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		// Get specific issue
+		issues, err := s.loadIssues(repoID)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		for _, issue := range issues {
+			if issue.ID == issueID {
+				respondJSON(w, http.StatusOK, issue)
+				return
+			}
+		}
+
+		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Issue not found"})
+	} else if r.Method == http.MethodPatch || r.Method == http.MethodPut {
+		// Update issue (toggle status or update body)
+		issues, err := s.loadIssues(repoID)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		var found bool
+		for i := range issues {
+			if issues[i].ID == issueID {
+				found = true
+				// Toggle status if it's a status update
+				var updateReq struct {
+					Status string `json:"status,omitempty"`
+					Body   string `json:"body,omitempty"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&updateReq); err == nil {
+					if updateReq.Status != "" {
+						issues[i].Status = updateReq.Status
+					}
+					if updateReq.Body != "" {
+						issues[i].Body = updateReq.Body
+					}
+				} else {
+					// If no body, just toggle status
+					if issues[i].Status == "open" {
+						issues[i].Status = "closed"
+					} else {
+						issues[i].Status = "open"
+					}
+				}
+				break
+			}
+		}
+
+		if !found {
+			respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Issue not found"})
+			return
+		}
+
+		// Save updated issues
+		db := s.metaStore.GetDB()
+		if db == nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Database not available"})
+			return
+		}
+
+		key := fmt.Sprintf("repo:%s:issues", repoID)
+		data, err := json.Marshal(issues)
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		if err := db.Put(key, data); err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+
+		// Return updated issue
+		for _, issue := range issues {
+			if issue.ID == issueID {
+				respondJSON(w, http.StatusOK, issue)
+				return
+			}
+		}
 	} else {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}

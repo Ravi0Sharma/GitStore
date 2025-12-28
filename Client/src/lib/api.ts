@@ -202,5 +202,12 @@ export const api = {
   async getIssues(repoId: string): Promise<any[]> {
     return fetchJSON<any[]>(`/api/repos/${repoId}/issues`);
   },
+
+  async toggleIssueStatus(repoId: string, issueId: string): Promise<any> {
+    return fetchJSON<any>(`/api/repos/${repoId}/issues/${issueId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({}),
+    });
+  },
 };
 

@@ -11,7 +11,7 @@ interface GitContextType {
   createRepository: (name: string, description?: string) => Promise<void>;
   createIssue: (repoId: string, title: string, body: string, priority: Priority, labels: Label[]) => void;
   updateIssueBody: (repoId: string, issueId: string, body: string) => void;
-  toggleIssueStatus: (repoId: string, issueId: string) => void;
+  toggleIssueStatus: (repoId: string, issueId: string) => Promise<void>;
   createBranch: (repoId: string, branchName: string) => Promise<void>;
   switchBranch: (repoId: string, branchName: string) => Promise<void>;
   mergeBranches: (repoId: string, fromBranch: string, toBranch: string) => Promise<MergeResult>;
@@ -33,7 +33,7 @@ const PLACEHOLDER_GIT_CONTEXT: GitContextType = {
   createRepository: async () => {},
   createIssue: () => {},
   updateIssueBody: () => {},
-  toggleIssueStatus: () => {},
+  toggleIssueStatus: async () => {},
   createBranch: async () => {},
   switchBranch: async () => {},
   mergeBranches: async () => Promise.resolve({ success: false, message: 'Git functionality not available' }),
@@ -308,9 +308,38 @@ export function GitProvider({ children }: GitProviderProps) {
     console.log('Update issue not implemented yet');
   };
 
-  const toggleIssueStatus = (repoId: string, issueId: string) => {
-    // TODO: Implement issue status toggle
-    console.log('Toggle issue status not implemented yet');
+  const toggleIssueStatus = async (repoId: string, issueId: string) => {
+    try {
+      console.log('GitContext: Toggling issue status', repoId, issueId);
+      
+      // Call API to toggle issue status
+      const updatedIssue = await api.toggleIssueStatus(repoId, issueId);
+      setApiStatus('connected');
+      setApiError(null);
+      
+      // Update issue in state
+      setRepositories(prev => prev.map(repo => {
+        if (repo.id === repoId) {
+          return {
+            ...repo,
+            issues: repo.issues.map(issue => 
+              issue.id === issueId 
+                ? { ...issue, status: updatedIssue.status as IssueStatus }
+                : issue
+            ),
+          };
+        }
+        return repo;
+      }));
+      
+      console.log('GitContext: Issue status toggled successfully');
+    } catch (err) {
+      console.error('Failed to toggle issue status:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setApiStatus('error');
+      setApiError(errorMsg);
+      throw err;
+    }
   };
 
   const createBranch = async (repoId: string, branchName: string) => {
