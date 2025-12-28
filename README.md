@@ -4,6 +4,7 @@ A monorepo containing:
 - **gitClone**: Go CLI for git-like operations with log-structured storage
 - **gitDb**: Go KV-store (log-structured store)
 - **Client**: React web application (Vite + React + TypeScript + Tailwind v4)
+- **cli**: Node.js + TypeScript CLI tool for file operations and git commands
 
 ## Quick Start
 
@@ -118,13 +119,18 @@ GitStore/
 │   │   └── gitserver/ # HTTP API server
 │   └── internal/      # Internal packages
 ├── gitDb/             # Log-structured KV store
-└── Client/             # React frontend
-    └── src/
-        ├── pages/      # Page components
-        ├── components/ # Reusable components
-        ├── context/    # React context (GitContext)
-        ├── lib/        # API client
-        └── routes.ts   # Route definitions
+├── Client/            # React frontend
+│   └── src/
+│       ├── pages/      # Page components
+│       ├── components/ # Reusable components
+│       ├── context/    # React context (GitContext)
+│       ├── lib/        # API client
+│       └── routes.ts   # Route definitions
+└── cli/               # Node.js + TypeScript CLI tool
+    ├── src/
+    │   ├── commands/   # CLI commands (init, file, git, interactive)
+    │   └── utils/      # Utility functions (repo validation, git whitelist)
+    └── dist/           # Compiled JavaScript output
 ```
 
 ## API Endpoints
@@ -244,6 +250,192 @@ npm run build
 - `POST /api/repos`: Creates repo folder AND saves metadata to database
 - Branch/commit operations update metadata automatically
 - Repositories are stable: they appear in UI even after server restart
+
+## CLI Tool
+
+The GitStore CLI is a Node.js + TypeScript command-line tool that provides file operations and git commands for local repositories.
+
+### Setup CLI
+
+```bash
+cd cli
+npm install
+npm run build
+```
+
+### Usage
+
+The CLI can be used in two modes:
+1. **Non-interactive**: Using command-line flags and arguments
+2. **Interactive**: Using prompts (automatically triggered when required options are missing)
+
+#### Basic Commands
+
+**Initialize a repository:**
+```bash
+cd cli
+npm run cli init --repo ./myrepo
+# or
+node dist/cli/index.js init --repo ./myrepo
+```
+
+**File Operations:**
+
+Create a file:
+```bash
+npm run cli file create --repo ./myrepo --path src/test.txt --content "hej"
+```
+
+Write to a file (overwrites existing):
+```bash
+npm run cli file write --repo ./myrepo --path src/test.txt --content "nytt innehåll"
+```
+
+Append to a file:
+```bash
+npm run cli file append --repo ./myrepo --path src/test.txt --content "\nmer text"
+```
+
+**Git Operations:**
+
+Show status:
+```bash
+npm run cli git status --repo ./myrepo
+```
+
+Add files:
+```bash
+npm run cli git add --repo ./myrepo --path .
+# or add specific file
+npm run cli git add --repo ./myrepo --path src/test.txt
+```
+
+Commit:
+```bash
+npm run cli git commit --repo ./myrepo -m "Add test file"
+```
+
+Push:
+```bash
+npm run cli git push --repo ./myrepo
+```
+
+Checkout branch:
+```bash
+npm run cli git checkout --repo ./myrepo --branch feature-branch --create-branch
+```
+
+List branches:
+```bash
+npm run cli git branch --repo ./myrepo
+```
+
+View commit log:
+```bash
+npm run cli git log --repo ./myrepo --number 10
+```
+
+#### Complete Workflow Example
+
+```bash
+# 1. Initialize a repository
+cd cli
+npm run cli init --repo ../myrepo
+
+# 2. Create a file
+npm run cli file create --repo ../myrepo --path src/test.txt --content "hej"
+
+# 3. Check status
+npm run cli git status --repo ../myrepo
+
+# 4. Add files to staging
+npm run cli git add --repo ../myrepo --path .
+
+# 5. Commit changes
+npm run cli git commit --repo ../myrepo -m "Add test file"
+
+# 6. View commit log
+npm run cli git log --repo ../myrepo
+
+# 7. Push to remote (if remote is configured)
+npm run cli git push --repo ../myrepo
+```
+
+#### Interactive Mode
+
+Start interactive mode for a guided experience:
+```bash
+npm run cli interactive
+# or
+npm run cli i
+```
+
+#### All Commands
+
+```bash
+# Initialize repository
+gitstore init [--repo <path>]
+
+# File operations
+gitstore file create [--repo <path>] [--path <path>] [--content <content>] [--interactive]
+gitstore file write [--repo <path>] [--path <path>] [--content <content>] [--interactive]
+gitstore file append [--repo <path>] [--path <path>] [--content <content>] [--interactive]
+
+# Git operations
+gitstore git status [--repo <path>] [--interactive]
+gitstore git add [--repo <path>] [--path <path>] [--interactive]
+gitstore git commit [--repo <path>] [-m <message>] [--interactive]
+gitstore git push [--repo <path>] [--remote <remote>] [--branch <branch>] [--interactive]
+gitstore git checkout [--repo <path>] [--branch <branch>] [--create-branch] [--interactive]
+gitstore git branch [--repo <path>] [--create <branch>] [--delete <branch>] [--interactive]
+gitstore git log [--repo <path>] [--number <number>] [--interactive]
+
+# Interactive mode
+gitstore interactive
+gitstore i
+```
+
+### Security
+
+The CLI implements security measures:
+- **Repository validation**: All commands validate that the specified path is a valid git repository (checks for `.git` directory)
+- **Git command whitelist**: Only allowed git subcommands can be executed (status, add, commit, push, checkout, branch, log, diff, pull, fetch, merge, clone, init)
+- **Error handling**: Clear error messages for invalid operations
+
+### Development
+
+**Build:**
+```bash
+cd cli
+npm run build
+```
+
+**Watch mode (development):**
+```bash
+cd cli
+npm run dev
+```
+
+**Run CLI:**
+```bash
+cd cli
+npm run cli [command]
+```
+
+### Global Installation (Optional)
+
+To install the CLI globally:
+
+```bash
+cd cli
+npm install -g .
+```
+
+Then you can use `gitstore` command from anywhere:
+```bash
+gitstore init --repo ./myrepo
+gitstore file create --repo ./myrepo --path test.txt --content "hello"
+```
 
 ## Notes
 
