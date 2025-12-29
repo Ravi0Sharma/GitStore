@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	reposresolver "gitclone/internal/app/repos"
 	"gitclone/internal/commands"
 	"gitclone/internal/metadata"
 	"gitclone/internal/storage"
@@ -206,8 +207,8 @@ func (s *Server) handleListRepos(w http.ResponseWriter, r *http.Request) {
 		// Convert to RepoListItem and check if folders exist
 		repos := make([]RepoListItem, 0, len(metaRepos))
 		for _, meta := range metaRepos {
-			repoPath := filepath.Join(s.repoBase, meta.ID)
-			_, err := os.Stat(repoPath)
+			// Use resolver to validate path (but allow missing repos for listing)
+			_, err := reposresolver.ResolveRepoPath(s.repoBase, meta.ID)
 			missing := err != nil
 
 			// Update missing flag in metadata if needed
@@ -299,11 +300,13 @@ func (s *Server) handleRepoRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetRepo(w http.ResponseWriter, r *http.Request, repoID string) {
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleGetRepo - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleGetRepo - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	repo, err := s.loadRepo(repoPath, repoID)
 	if err != nil {
@@ -320,11 +323,13 @@ func (s *Server) handleRepoBranches(w http.ResponseWriter, r *http.Request, repo
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoBranches - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleRepoBranches - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	branches, err := s.loadBranches(repoPath)
 	if err != nil {
@@ -341,11 +346,13 @@ func (s *Server) handleRepoCommits(w http.ResponseWriter, r *http.Request, repoI
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoCommits - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleRepoCommits - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	// Get branch from query parameter (defaults to current branch if not specified)
 	branch := r.URL.Query().Get("branch")
@@ -380,11 +387,13 @@ func (s *Server) handleRepoCheckout(w http.ResponseWriter, r *http.Request, repo
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoCheckout - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleRepoCheckout - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	// Change to repo directory temporarily
 	oldDir, err := os.Getwd()
@@ -430,19 +439,13 @@ func (s *Server) handleRepoCommit(w http.ResponseWriter, r *http.Request, repoID
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoCommit - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
-
-	// Only GitClone repos are supported
-	if !s.isGitCloneRepo(repoPath) {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "GitClone repository (.gitclone) not found.",
-		})
-		return
-	}
+	log.Printf("[DEBUG] handleRepoCommit - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	// Check if there are staged files
 	opts := storage.InitOptions{Bare: false}
@@ -497,19 +500,13 @@ func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID st
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoAdd - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
-
-	// Only GitClone repos are supported
-	if !s.isGitCloneRepo(repoPath) {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "GitClone repository (.gitclone) not found.",
-		})
-		return
-	}
+	log.Printf("[DEBUG] handleRepoAdd - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	// Change to repo directory temporarily
 	oldDir, err := os.Getwd()
@@ -580,19 +577,13 @@ func (s *Server) handleRepoPush(w http.ResponseWriter, r *http.Request, repoID s
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoPush - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
-
-	// Only GitClone repos are supported
-	if !s.isGitCloneRepo(repoPath) {
-		respondJSON(w, http.StatusBadRequest, ErrorResponse{
-			Error: "GitClone repository (.gitclone) not found.",
-		})
-		return
-	}
+	log.Printf("[DEBUG] handleRepoPush - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	opts := storage.InitOptions{Bare: false}
 	branch := req.Branch
@@ -694,11 +685,13 @@ func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID 
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoMerge - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleRepoMerge - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	opts := storage.InitOptions{Bare: false}
 
@@ -1148,11 +1141,13 @@ func (s *Server) isAncestor(repoPath string, opts storage.InitOptions, commitA, 
 }
 
 func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID string) {
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoIssues - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleRepoIssues - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	if r.Method == http.MethodGet {
 		// Get all issues for the repo
@@ -1210,11 +1205,13 @@ func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID
 }
 
 func (s *Server) handleIssue(w http.ResponseWriter, r *http.Request, repoID, issueID string) {
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleIssue - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleIssue - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	if r.Method == http.MethodGet {
 		// Get specific issue
@@ -1376,11 +1373,13 @@ func (s *Server) handleRepoFiles(w http.ResponseWriter, r *http.Request, repoID 
 		return
 	}
 
-	repoPath := filepath.Join(s.repoBase, repoID)
-	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+	repoPath, err := reposresolver.ResolveRepoPath(s.repoBase, repoID)
+	if err != nil {
+		log.Printf("[DEBUG] handleRepoFiles - repoId=%s, error=%v", repoID, err)
 		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
 		return
 	}
+	log.Printf("[DEBUG] handleRepoFiles - repoId=%s, resolvedPath=%s", repoID, repoPath)
 
 	// Create full file path
 	fullPath := filepath.Join(repoPath, req.Path)
