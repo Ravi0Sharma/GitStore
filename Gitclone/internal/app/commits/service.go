@@ -2,10 +2,8 @@ package commits
 
 import (
 	"fmt"
-	"os"
 	"time"
 
-	"gitclone/internal/commands"
 	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
 	repostorage "gitclone/internal/storage"
@@ -106,7 +104,7 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 	return commits, nil
 }
 
-// CreateCommit creates a new commit with the given message
+// CreateCommit creates a new commit with the given message atomically
 func (s *Service) CreateCommit(repoID, message string) error {
 	// Open per-repo store
 	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
@@ -114,8 +112,6 @@ func (s *Service) CreateCommit(repoID, message string) error {
 		return err
 	}
 	defer repoStore.Close()
-
-	repoPath := repoStore.RepoPath()
 
 	stagedFiles, err := repostorage.GetStagedFilesFromStore(repoStore)
 	if err != nil {
@@ -126,21 +122,56 @@ func (s *Service) CreateCommit(repoID, message string) error {
 		return fmt.Errorf("nothing to commit. Stage changes first with 'git add <path>'")
 	}
 
-	oldDir, err := os.Getwd()
+	// Get current branch
+	currentBranch, err := repostorage.ReadHEADBranchFromStore(repoStore)
 	if err != nil {
-		return err
-	}
-	defer os.Chdir(oldDir)
-
-	if err := os.Chdir(repoPath); err != nil {
-		return err
+		return fmt.Errorf("failed to read current branch: %w", err)
 	}
 
-	commands.Commit([]string{"-m", message})
+	// Get current branch tip for parent
+	parentPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, currentBranch)
+	if err != nil {
+		return fmt.Errorf("failed to read branch tip: %w", err)
+	}
 
-	// Clear staging area after successful commit
-	if err := repostorage.ClearIndexFromStore(repoStore); err != nil {
-		// Log but don't fail the operation
+	// Allocate commit ID (this needs to be done before batch)
+	// For now, we'll read it directly - in a real system this should be atomic too
+	commitID, err := repostorage.NextCommitIDFromStore(repoStore)
+	if err != nil {
+		return fmt.Errorf("failed to allocate commit ID: %w", err)
+	}
+
+	// Create commit object
+	commit := repostorage.Commit{
+		ID:        commitID,
+		Message:   message,
+		Branch:    currentBranch,
+		Timestamp: time.Now().Unix(),
+		Parent:    parentPtr,
+	}
+
+	// Create write batch for atomic operation
+	batch := repoStore.NewWriteBatch()
+
+	// Add all writes to batch:
+	// 1. Commit object
+	if err := repostorage.WriteCommitObjectToBatch(batch, commit); err != nil {
+		return fmt.Errorf("failed to add commit to batch: %w", err)
+	}
+
+	// 2. Update branch ref
+	if err := repostorage.WriteHeadRefToBatch(batch, currentBranch, commitID); err != nil {
+		return fmt.Errorf("failed to add ref update to batch: %w", err)
+	}
+
+	// 3. Clear index
+	if err := repostorage.ClearIndexToBatch(batch); err != nil {
+		return fmt.Errorf("failed to add index clear to batch: %w", err)
+	}
+
+	// Commit batch atomically
+	if err := batch.Commit(); err != nil {
+		return fmt.Errorf("failed to commit batch: %w", err)
 	}
 
 	return nil

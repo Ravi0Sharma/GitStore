@@ -45,11 +45,18 @@ func NewRepoStore(repoBase, repoID string) (*RepoStore, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	return &RepoStore{
+	store := &RepoStore{
 		repoID:   repoID,
 		repoPath: repoPath,
 		db:       db,
-	}, nil
+	}
+
+	// Recover from incomplete transactions on startup
+	if err := RecoverTransactions(store); err != nil {
+		// Log but don't fail - recovery is best effort
+	}
+
+	return store, nil
 }
 
 // Close closes the database connection
@@ -74,5 +81,10 @@ func (rs *RepoStore) RepoID() string {
 // RepoPath returns the absolute path to the repository
 func (rs *RepoStore) RepoPath() string {
 	return rs.repoPath
+}
+
+// NewWriteBatch creates a new write batch for atomic operations
+func (rs *RepoStore) NewWriteBatch() *WriteBatch {
+	return NewWriteBatch(rs)
 }
 
