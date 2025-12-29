@@ -174,7 +174,19 @@ const RepoPage = () => {
                 }`}
                 onClick={async () => {
                   await switchBranch(repo.id, branch.name);
-                  // Commits will be reloaded via useEffect when currentBranch changes
+                  // Always reload commits when clicking a branch (even if same branch)
+                  // This ensures we show the latest commits for that branch
+                  setLoadingCommits(true);
+                  try {
+                    const loadedCommits = await api.getCommits(repo.id, branch.name, 10);
+                    setCommits(loadedCommits);
+                  } catch (err) {
+                    console.error('Failed to reload commits:', err);
+                    setCommits([]);
+                  } finally {
+                    setLoadingCommits(false);
+                  }
+                  // Commits will also be reloaded via useEffect when currentBranch changes
                 }}
               >
                 <div className="flex items-center gap-3">
