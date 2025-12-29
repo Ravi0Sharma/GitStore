@@ -48,10 +48,17 @@ const BranchPage = () => {
     setErrorMessage('');
     try {
       const apiBranches = await api.getBranches(repoId);
-      const branchDates = apiBranches.map(b => ({
-        name: b.name,
-        createdAt: new Date(b.createdAt),
-      }));
+      // Deduplicate branches by name
+      const branchMap = new Map<string, { name: string; createdAt: Date }>();
+      apiBranches.forEach(b => {
+        if (!branchMap.has(b.name)) {
+          branchMap.set(b.name, {
+            name: b.name,
+            createdAt: new Date(b.createdAt),
+          });
+        }
+      });
+      const branchDates = Array.from(branchMap.values());
       setBranches(branchDates);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load branches';
@@ -206,9 +213,9 @@ const BranchPage = () => {
                 No branches found
               </div>
             ) : (
-              branches.map((branch) => (
+              branches.map((branch, index) => (
                 <div
-                  key={branch.name}
+                  key={`${repoId}-${branch.name}-${index}`}
                   className="p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors"
                 >
                   <div className="flex items-center gap-3">

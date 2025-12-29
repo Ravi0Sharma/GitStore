@@ -75,11 +75,14 @@ Git commands (via API):
   git status              - Show repository status
   git branch              - List branches
   git log                 - Show commit log
+  git add [path]          - Stage files (default: ".")
   git commit -m "message" - Commit changes
+  git push [remote] [branch] - Push to remote (default: origin, current branch)
 
 Examples:
-  create file src/test.txt Hello World
-  edit file src/test.txt Updated content
+  create file text.txt Hello World
+  edit file text.txt Updated content
+  git add .
   git commit -m "Add test file"
 
 Repository: ${repo?.name || repoId}
@@ -159,6 +162,30 @@ Current branch: ${repo?.currentBranch || 'main'}
             } catch (error) {
               output = `Error: ${error instanceof Error ? error.message : 'Failed to fetch commits'}`;
             }
+          } else if (args[0] === 'add') {
+            if (!repoId) {
+              output = 'Error: Repository ID missing';
+              break;
+            }
+            try {
+              // Path is optional, default to "." (all changes)
+              const path = args[1] || '.';
+              await api.add(repoId, path);
+              output = `Staged files: ${path === '.' ? 'all changes' : path}\n`;
+              output += `You can now use 'git commit -m "message"' to commit these changes.`;
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : 'Failed to stage files';
+              output = `Error: ${errorMsg}\n`;
+              if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+                output += `\nPossible issues:\n`;
+                output += `- GitStore server might not be running (check http://localhost:8080)\n`;
+                output += `- Repository "${repoId}" might not exist\n`;
+                output += `- Make sure the backend server has been restarted with the latest changes\n`;
+              } else if (errorMsg.includes('git add failed')) {
+                output += `\nNote: This command requires a standard Git repository (not GitStore).\n`;
+                output += `Make sure the repository is a standard Git repo with a .git directory.`;
+              }
+            }
           } else if (args[0] === 'commit' && args[1] === '-m' && args[2]) {
             if (!repoId) {
               output = 'Error: Repository ID missing';
@@ -170,6 +197,19 @@ Current branch: ${repo?.currentBranch || 'main'}
               output = `Commit created successfully!\nMessage: ${message}`;
             } catch (error) {
               output = `Error: ${error instanceof Error ? error.message : 'Failed to create commit'}`;
+            }
+          } else if (args[0] === 'push') {
+            if (!repoId) {
+              output = 'Error: Repository ID missing';
+              break;
+            }
+            try {
+              const remote = args[1] || 'origin';
+              const branch = args[2] || repo?.currentBranch || 'main';
+              await api.push(repoId, remote, branch);
+              output = `Pushed to ${remote}/${branch} successfully!`;
+            } catch (error) {
+              output = `Error: ${error instanceof Error ? error.message : 'Failed to push'}`;
             }
           } else {
             output = `Unknown git command: ${args.join(' ')}\nUse 'help' for available commands.`;
@@ -238,7 +278,13 @@ Current branch: ${repo?.currentBranch || 'main'}
           }
           try {
             const filePath = args[1];
+            // Join all remaining args as content, preserving spaces
             const content = args.slice(2).join(' ') || '';
+            
+            if (import.meta.env.DEV) {
+              console.log(`Creating file: ${filePath} in repo: ${repoId}`);
+            }
+            
             await api.createOrEditFile(repoId, filePath, content);
             output = `File created: ${filePath}\n`;
             if (content) {
@@ -249,14 +295,17 @@ Current branch: ${repo?.currentBranch || 'main'}
             output += `You can now use 'git commit -m "message"' to commit this file.`;
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to create file';
+            console.error('Error creating file:', error);
             output = `Error: ${errorMsg}\n`;
-            if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+            if (errorMsg.includes('404') || errorMsg.includes('Not Found') || errorMsg.includes('Failed to reach API')) {
               output += `\nPossible issues:\n`;
-              output += `- GitStore server might not be running\n`;
+              output += `- GitStore server might not be running (check http://localhost:8080)\n`;
               output += `- Repository "${repoId}" might not exist\n`;
-              output += `- API endpoint /api/repos/${repoId}/files might not be available\n`;
+              output += `- Check browser console for more details\n`;
+            } else if (errorMsg.includes('Network error') || errorMsg.includes('Failed to reach')) {
+              output += `\nNetwork error: Make sure the GitStore server is running on http://localhost:8080\n`;
             } else {
-              output += `Make sure the GitStore server is running on http://localhost:8080`;
+              output += `\nMake sure the GitStore server is running on http://localhost:8080`;
             }
           }
           break;
@@ -276,7 +325,13 @@ Current branch: ${repo?.currentBranch || 'main'}
           }
           try {
             const filePath = args[1];
+            // Join all remaining args as content, preserving spaces
             const content = args.slice(2).join(' ') || '';
+            
+            if (import.meta.env.DEV) {
+              console.log(`Editing file: ${filePath} in repo: ${repoId}`);
+            }
+            
             await api.createOrEditFile(repoId, filePath, content);
             output = `File updated: ${filePath}\n`;
             if (content) {
@@ -287,14 +342,17 @@ Current branch: ${repo?.currentBranch || 'main'}
             output += `You can now use 'git commit -m "message"' to commit this file.`;
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to edit file';
+            console.error('Error editing file:', error);
             output = `Error: ${errorMsg}\n`;
-            if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+            if (errorMsg.includes('404') || errorMsg.includes('Not Found') || errorMsg.includes('Failed to reach API')) {
               output += `\nPossible issues:\n`;
-              output += `- GitStore server might not be running\n`;
+              output += `- GitStore server might not be running (check http://localhost:8080)\n`;
               output += `- Repository "${repoId}" might not exist\n`;
-              output += `- API endpoint /api/repos/${repoId}/files might not be available\n`;
+              output += `- Check browser console for more details\n`;
+            } else if (errorMsg.includes('Network error') || errorMsg.includes('Failed to reach')) {
+              output += `\nNetwork error: Make sure the GitStore server is running on http://localhost:8080\n`;
             } else {
-              output += `Make sure the GitStore server is running on http://localhost:8080`;
+              output += `\nMake sure the GitStore server is running on http://localhost:8080`;
             }
           }
           break;
