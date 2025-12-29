@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -358,16 +357,13 @@ func (s *Server) handleRepoCommits(w http.ResponseWriter, r *http.Request, repoI
 		}
 	}
 
-	commits, err := s.loadCommits(repoPath, branch)
+	commits, err := s.loadCommits(repoPath, branch, limit)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	// Apply limit
-	if limit > 0 && limit < len(commits) {
-		commits = commits[:limit]
-	}
+	// Limit is already applied in loadCommits
 
 	respondJSON(w, http.StatusOK, commits)
 }
@@ -440,6 +436,29 @@ func (s *Server) handleRepoCommit(w http.ResponseWriter, r *http.Request, repoID
 		return
 	}
 
+	// Only GitClone repos are supported
+	if !s.isGitCloneRepo(repoPath) {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "GitClone repository (.gitclone) not found.",
+		})
+		return
+	}
+
+	// Check if there are staged files
+	opts := storage.InitOptions{Bare: false}
+	stagedFiles, err := storage.GetStagedFiles(repoPath, opts)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to check staged files: %v", err)})
+		return
+	}
+
+	if len(stagedFiles) == 0 {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "Nothing to commit. Stage changes first with 'git add <path>'",
+		})
+		return
+	}
+
 	// Change to repo directory temporarily
 	oldDir, err := os.Getwd()
 	if err != nil {
@@ -453,21 +472,17 @@ func (s *Server) handleRepoCommit(w http.ResponseWriter, r *http.Request, repoID
 		return
 	}
 
-	// Call commit command
+	// Use GitClone's commit command
 	commands.Commit([]string{"-m", req.Message})
 
-	// Update metadata: refresh commit count
-	meta, err := s.metaStore.GetRepo(repoID)
-	if err == nil {
-		commits, _ := s.loadCommits(repoPath)
-		meta.CommitCount = len(commits)
-		meta.UpdatedAt = time.Now()
-		if err := s.metaStore.UpdateRepo(*meta); err != nil {
-			log.Printf("Warning: failed to update metadata after commit: %v", err)
-		}
+	// Clear staging area after successful commit
+	if err := storage.ClearIndex(repoPath, opts); err != nil {
+		log.Printf("Warning: failed to clear staging area after commit: %v", err)
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{"message": "Commit created successfully"})
+	respondJSON(w, http.StatusOK, map[string]string{
+		"message": "Commit created successfully (local only)",
+	})
 }
 
 func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID string) {
@@ -488,6 +503,14 @@ func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID st
 		return
 	}
 
+	// Only GitClone repos are supported
+	if !s.isGitCloneRepo(repoPath) {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "GitClone repository (.gitclone) not found.",
+		})
+		return
+	}
+
 	// Change to repo directory temporarily
 	oldDir, err := os.Getwd()
 	if err != nil {
@@ -501,18 +524,44 @@ func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID st
 		return
 	}
 
-	// Call git add command (for standard git repos)
+	// Add files to staging area
 	path := req.Path
 	if path == "" {
 		path = "."
 	}
 
-	// Use standard git command
-	cmd := exec.Command("git", "add", path)
-	cmd.Dir = repoPath
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("git add failed: %s", string(output))})
+	// If path is ".", add all files in repo (excluding .gitclone)
+	var pathsToStage []string
+	if path == "." {
+		// Find all files in repo (excluding .gitclone)
+		err := filepath.Walk(repoPath, func(filePath string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				if info.Name() == storage.RepoDir {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			relPath, err := filepath.Rel(repoPath, filePath)
+			if err == nil {
+				pathsToStage = append(pathsToStage, relPath)
+			}
+			return nil
+		})
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to scan files: %v", err)})
+			return
+		}
+	} else {
+		pathsToStage = []string{path}
+	}
+
+	// Add to staging area
+	opts := storage.InitOptions{Bare: false}
+	if err := storage.AddToIndex(repoPath, opts, pathsToStage); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to stage files: %v", err)})
 		return
 	}
 
@@ -537,50 +586,100 @@ func (s *Server) handleRepoPush(w http.ResponseWriter, r *http.Request, repoID s
 		return
 	}
 
-	// Change to repo directory temporarily
-	oldDir, err := os.Getwd()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
-		return
-	}
-	defer os.Chdir(oldDir)
-
-	if err := os.Chdir(repoPath); err != nil {
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+	// Only GitClone repos are supported
+	if !s.isGitCloneRepo(repoPath) {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "GitClone repository (.gitclone) not found.",
+		})
 		return
 	}
 
-	// Call git push command (for standard git repos)
-	remote := req.Remote
-	if remote == "" {
-		remote = "origin"
-	}
+	opts := storage.InitOptions{Bare: false}
 	branch := req.Branch
 	if branch == "" {
-		// Get current branch using git
-		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-		cmd.Dir = repoPath
-		output, err := cmd.CombinedOutput()
+		currentBranch, err := storage.ReadHEADBranch(repoPath, opts)
 		if err != nil {
-			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get current branch"})
-			return
-		}
-		branch = strings.TrimSpace(string(output))
-		if branch == "" {
 			branch = "main"
+		} else {
+			branch = currentBranch
 		}
 	}
 
-	// Use standard git command
-	cmd := exec.Command("git", "push", remote, branch)
-	cmd.Dir = repoPath
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("git push failed: %s", string(output))})
+	// Get current branch tip
+	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, branch)
+	if err != nil || tipPtr == nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "No commits to push"})
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{"message": fmt.Sprintf("Pushed to %s/%s successfully", remote, branch)})
+	// Get already pushed commits
+	pushedCommits, err := storage.GetPushedCommits(repoPath, opts, branch)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to get pushed commits: %v", err)})
+		return
+	}
+
+	// Find commits that need to be pushed (walk from tip to last pushed commit)
+	var commitsToPush []int
+	currentID := *tipPtr
+
+	// Walk commits from tip backwards until we hit a pushed commit
+	for {
+		// Check if this commit is already pushed
+		isPushed := false
+		for _, id := range pushedCommits {
+			if id == currentID {
+				isPushed = true
+				break
+			}
+		}
+
+		if isPushed {
+			break
+		}
+
+		// Add to push list
+		commitsToPush = append(commitsToPush, currentID)
+
+		// Read commit to get parent
+		c, err := storage.ReadCommitObject(repoPath, opts, currentID)
+		if err != nil {
+			break
+		}
+
+		if c.Parent == nil {
+			break
+		}
+		currentID = *c.Parent
+	}
+
+	if len(commitsToPush) == 0 {
+		respondJSON(w, http.StatusOK, map[string]string{"message": "Already up to date"})
+		return
+	}
+
+	// Push commits (mark as pushed)
+	for _, commitID := range commitsToPush {
+		if err := storage.PushCommit(repoPath, opts, branch, commitID); err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to push commit %d: %v", commitID, err)})
+			return
+		}
+	}
+
+	// Update metadata commit count
+	meta, err := s.metaStore.GetRepo(repoID)
+	if err == nil {
+		commits, _ := s.loadCommits(repoPath, branch, 100)
+		meta.CommitCount = len(commits)
+		meta.UpdatedAt = time.Now()
+		if err := s.metaStore.UpdateRepo(*meta); err != nil {
+			log.Printf("Warning: failed to update metadata after push: %v", err)
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("Pushed %d commit(s) to remote successfully", len(commitsToPush)),
+	})
 }
 
 func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID string) {
@@ -678,7 +777,9 @@ func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID 
 	meta, err := s.metaStore.GetRepo(repoID)
 	if err == nil {
 		branches, _ := s.loadBranches(repoPath)
-		commits, _ := s.loadCommits(repoPath)
+		// Get current branch for commit count
+		currentBranch, _ := storage.ReadHEADBranch(repoPath, storage.InitOptions{Bare: false})
+		commits, _ := s.loadCommits(repoPath, currentBranch, 100)
 		meta.BranchCount = len(branches)
 		meta.CommitCount = len(commits)
 		meta.UpdatedAt = time.Now()
@@ -755,7 +856,7 @@ func (s *Server) handleCreateRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize the repository
-	log.Printf("POST /api/repos - Initializing git repository in: %s", repoPath)
+	log.Printf("POST /api/repos - Initializing GitClone repository in: %s", repoPath)
 	commands.Init([]string{})
 
 	// Verify that .gitclone directory was created
@@ -815,6 +916,13 @@ func (s *Server) handleCreateRepo(w http.ResponseWriter, r *http.Request) {
 
 // Helper functions
 
+// isGitCloneRepo checks if a repository is a GitClone repo (.gitclone/)
+func (s *Server) isGitCloneRepo(repoPath string) bool {
+	gitclonePath := filepath.Join(repoPath, storage.RepoDir)
+	hasGitClone, err := os.Stat(gitclonePath)
+	return err == nil && hasGitClone.IsDir()
+}
+
 func (s *Server) scanRepos() ([]RepoListItem, error) {
 	// Initialize as empty slice (not nil) to ensure JSON returns [] instead of null
 	repos := make([]RepoListItem, 0)
@@ -858,7 +966,7 @@ func (s *Server) loadRepoSummary(repoPath, repoID string) (RepoListItem, error) 
 
 	currentBranch, _ := storage.ReadHEADBranch(repoPath, opts)
 	branches, _ := s.loadBranches(repoPath)
-	commits, _ := s.loadCommits(repoPath)
+	commits, _ := s.loadCommits(repoPath, currentBranch, 100)
 
 	return RepoListItem{
 		ID:            repoID,
@@ -874,7 +982,7 @@ func (s *Server) loadRepo(repoPath, repoID string) (Repository, error) {
 
 	currentBranch, _ := storage.ReadHEADBranch(repoPath, opts)
 	branches, _ := s.loadBranches(repoPath)
-	commits, _ := s.loadCommits(repoPath)
+	commits, _ := s.loadCommits(repoPath, currentBranch, 100)
 	issues, _ := s.loadIssues(repoID)
 
 	// Convert issues to []interface{} for Repository struct
@@ -922,13 +1030,18 @@ func (s *Server) loadBranches(repoPath string) ([]Branch, error) {
 	return branches, nil
 }
 
-func (s *Server) loadCommits(repoPath string, branchName ...string) ([]Commit, error) {
+func (s *Server) loadCommits(repoPath string, branchName string, limit int) ([]Commit, error) {
 	opts := storage.InitOptions{Bare: false}
+
+	// Only GitClone repos are supported
+	if !s.isGitCloneRepo(repoPath) {
+		return []Commit{}, nil
+	}
 
 	// Use provided branch name, or default to current branch
 	var targetBranch string
-	if len(branchName) > 0 && branchName[0] != "" {
-		targetBranch = branchName[0]
+	if branchName != "" {
+		targetBranch = branchName
 	} else {
 		var err error
 		targetBranch, err = storage.ReadHEADBranch(repoPath, opts)
@@ -937,6 +1050,23 @@ func (s *Server) loadCommits(repoPath string, branchName ...string) ([]Commit, e
 		}
 	}
 
+	// Get pushed commits for this branch
+	pushedCommits, err := storage.GetPushedCommits(repoPath, opts, targetBranch)
+	if err != nil {
+		return []Commit{}, err
+	}
+
+	if len(pushedCommits) == 0 {
+		return []Commit{}, nil
+	}
+
+	// Create a map for quick lookup
+	pushedMap := make(map[int]bool)
+	for _, id := range pushedCommits {
+		pushedMap[id] = true
+	}
+
+	// Read commits using GitClone storage, but only include pushed ones
 	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, targetBranch)
 	if err != nil || tipPtr == nil {
 		return []Commit{}, nil
@@ -944,19 +1074,24 @@ func (s *Server) loadCommits(repoPath string, branchName ...string) ([]Commit, e
 
 	var commits []Commit
 	id := *tipPtr
+	count := 0
 
-	for {
+	for count < limit {
 		c, err := storage.ReadCommitObject(repoPath, opts, id)
 		if err != nil {
 			break
 		}
 
-		commits = append(commits, Commit{
-			Hash:    fmt.Sprintf("%d", c.ID),
-			Message: c.Message,
-			Author:  "system", // TODO: get from commit
-			Date:    time.Unix(c.Timestamp, 0).Format(time.RFC3339),
-		})
+		// Only include pushed commits
+		if pushedMap[c.ID] {
+			commits = append(commits, Commit{
+				Hash:    fmt.Sprintf("%d", c.ID),
+				Message: c.Message,
+				Author:  "system", // TODO: get from commit
+				Date:    time.Unix(c.Timestamp, 0).Format(time.RFC3339),
+			})
+			count++
+		}
 
 		if c.Parent == nil {
 			break

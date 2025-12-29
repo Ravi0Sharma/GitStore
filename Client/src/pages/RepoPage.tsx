@@ -254,7 +254,7 @@ const RepoPage = () => {
                 )}
               </div>
             ) : (
-              <p className="text-muted-foreground">No commits yet on branch "{repo?.currentBranch || 'main'}"</p>
+              <p className="text-muted-foreground">No pushed commits yet</p>
             )}
           </div>
         </div>
