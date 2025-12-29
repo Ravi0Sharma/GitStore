@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
-	"time"
 
 	"gitclone/internal/app/branches"
 	"gitclone/internal/app/commits"
 	"gitclone/internal/app/files"
+	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
-	"gitclone/internal/storage"
+	repostorage "gitclone/internal/storage"
 )
 
 // Server holds the server dependencies
@@ -49,11 +48,18 @@ func (s *Server) MetaStore() *metadata.Store {
 
 // LoadRepoSummary loads a repository summary
 func (s *Server) LoadRepoSummary(repoPath, repoID string) (RepoListItem, error) {
-	opts := storage.InitOptions{Bare: false}
+	// Use services with RepoStore
+	branches, _ := s.branchSvc.ListBranches(repoID)
+	commits, _ := s.commitSvc.ListCommits(repoID, "", 100)
 
-	currentBranch, _ := storage.ReadHEADBranch(repoPath, opts)
-	branches, _ := s.LoadBranches(repoPath)
-	commits, _ := s.LoadCommits(repoPath, currentBranch, 100)
+	currentBranch := ""
+	if len(branches) > 0 {
+		// Try to get current branch from metadata
+		meta, err := s.metaStore.GetRepo(repoID)
+		if err == nil {
+			currentBranch = meta.CurrentBranch
+		}
+	}
 
 	return RepoListItem{
 		ID:            repoID,
@@ -66,12 +72,37 @@ func (s *Server) LoadRepoSummary(repoPath, repoID string) (RepoListItem, error) 
 
 // LoadRepo loads a full repository with all details
 func (s *Server) LoadRepo(repoPath, repoID string) (Repository, error) {
-	opts := storage.InitOptions{Bare: false}
-
-	currentBranch, _ := storage.ReadHEADBranch(repoPath, opts)
-	branches, _ := s.LoadBranches(repoPath)
-	commits, _ := s.LoadCommits(repoPath, currentBranch, 100)
+	// Use services with RepoStore
+	branches, _ := s.branchSvc.ListBranches(repoID)
+	commits, _ := s.commitSvc.ListCommits(repoID, "", 100)
 	issues, _ := s.LoadIssues(repoID)
+
+	// Get current branch from metadata
+	currentBranch := ""
+	meta, err := s.metaStore.GetRepo(repoID)
+	if err == nil {
+		currentBranch = meta.CurrentBranch
+	}
+
+	// Convert branches to HTTP types
+	httpBranches := make([]Branch, len(branches))
+	for i, b := range branches {
+		httpBranches[i] = Branch{
+			Name:      b.Name,
+			CreatedAt: b.CreatedAt,
+		}
+	}
+
+	// Convert commits to HTTP types
+	httpCommits := make([]Commit, len(commits))
+	for i, c := range commits {
+		httpCommits[i] = Commit{
+			Hash:    c.Hash,
+			Message: c.Message,
+			Author:  c.Author,
+			Date:    c.Date,
+		}
+	}
 
 	// Convert issues to []interface{} for Repository struct
 	issuesInterface := make([]interface{}, len(issues))
@@ -83,114 +114,12 @@ func (s *Server) LoadRepo(repoPath, repoID string) (Repository, error) {
 		ID:            repoID,
 		Name:          filepath.Base(repoID),
 		CurrentBranch: currentBranch,
-		Branches:      branches,
-		Commits:       commits,
+		Branches:      httpBranches,
+		Commits:       httpCommits,
 		Issues:        issuesInterface,
 	}, nil
 }
 
-// LoadBranches loads all branches for a repository
-func (s *Server) LoadBranches(repoPath string) ([]Branch, error) {
-	opts := storage.InitOptions{Bare: false}
-
-	branchNames, err := storage.ListBranches(repoPath, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// Deduplicate branches by name (use map to track seen branches)
-	seen := make(map[string]bool)
-	uniqueNames := make([]string, 0, len(branchNames))
-	for _, name := range branchNames {
-		if !seen[name] {
-			seen[name] = true
-			uniqueNames = append(uniqueNames, name)
-		}
-	}
-
-	branches := make([]Branch, 0, len(uniqueNames))
-	for _, name := range uniqueNames {
-		branches = append(branches, Branch{
-			Name:      name,
-			CreatedAt: time.Now().Format(time.RFC3339), // TODO: get actual creation time
-		})
-	}
-
-	return branches, nil
-}
-
-// LoadCommits loads commits for a repository branch
-func (s *Server) LoadCommits(repoPath string, branchName string, limit int) ([]Commit, error) {
-	opts := storage.InitOptions{Bare: false}
-
-	// Only GitClone repos are supported
-	if !s.isGitCloneRepo(repoPath) {
-		return []Commit{}, nil
-	}
-
-	// Use provided branch name, or default to current branch
-	var targetBranch string
-	if branchName != "" {
-		targetBranch = branchName
-	} else {
-		var err error
-		targetBranch, err = storage.ReadHEADBranch(repoPath, opts)
-		if err != nil {
-			return []Commit{}, nil
-		}
-	}
-
-	// Get pushed commits for this branch
-	pushedCommits, err := storage.GetPushedCommits(repoPath, opts, targetBranch)
-	if err != nil {
-		return []Commit{}, err
-	}
-
-	if len(pushedCommits) == 0 {
-		return []Commit{}, nil
-	}
-
-	// Create a map for quick lookup
-	pushedMap := make(map[int]bool)
-	for _, id := range pushedCommits {
-		pushedMap[id] = true
-	}
-
-	// Read commits using GitClone storage, but only include pushed ones
-	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, targetBranch)
-	if err != nil || tipPtr == nil {
-		return []Commit{}, nil
-	}
-
-	var commits []Commit
-	id := *tipPtr
-	count := 0
-
-	for count < limit {
-		c, err := storage.ReadCommitObject(repoPath, opts, id)
-		if err != nil {
-			break
-		}
-
-		// Only include pushed commits
-		if pushedMap[c.ID] {
-			commits = append(commits, Commit{
-				Hash:    fmt.Sprintf("%d", c.ID),
-				Message: c.Message,
-				Author:  "system", // TODO: get from commit
-				Date:    time.Unix(c.Timestamp, 0).Format(time.RFC3339),
-			})
-			count++
-		}
-
-		if c.Parent == nil {
-			break
-		}
-		id = *c.Parent
-	}
-
-	return commits, nil
-}
 
 // LoadIssues loads all issues for a repository
 func (s *Server) LoadIssues(repoID string) ([]Issue, error) {
@@ -245,15 +174,9 @@ func (s *Server) SaveIssue(repoID string, issue Issue) error {
 	return nil
 }
 
-// isGitCloneRepo checks if a repository is a GitClone repo (.gitclone/)
-func (s *Server) isGitCloneRepo(repoPath string) bool {
-	gitclonePath := filepath.Join(repoPath, storage.RepoDir)
-	hasGitClone, err := os.Stat(gitclonePath)
-	return err == nil && hasGitClone.IsDir()
-}
 
-// IsAncestor checks if commitA is an ancestor of commitB (i.e., commitA is reachable from commitB)
-func (s *Server) IsAncestor(repoPath string, opts storage.InitOptions, commitA, commitB int) bool {
+// IsAncestorFromStore checks if commitA is an ancestor of commitB using RepoStore
+func (s *Server) IsAncestorFromStore(repoStore *storage.RepoStore, commitA, commitB int) bool {
 	// If they're the same, it's trivially an ancestor
 	if commitA == commitB {
 		return true
@@ -281,7 +204,7 @@ func (s *Server) IsAncestor(repoPath string, opts storage.InitOptions, commitA, 
 		}
 
 		// Read commit and add parents to queue
-		commit, err := storage.ReadCommitObject(repoPath, opts, current)
+		commit, err := repostorage.ReadCommitObjectFromStore(repoStore, current)
 		if err != nil {
 			// If we can't read the commit, stop searching
 			break

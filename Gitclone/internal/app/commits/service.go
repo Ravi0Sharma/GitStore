@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"gitclone/internal/app/repos"
 	"gitclone/internal/commands"
+	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
-	"gitclone/internal/storage"
+	repostorage "gitclone/internal/storage"
 )
 
 // Commit represents a git commit
@@ -35,12 +35,12 @@ func NewService(repoBase string, metaStore *metadata.Store) *Service {
 
 // ListCommits returns commits for a repository branch
 func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, error) {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return nil, err
 	}
-
-	opts := storage.InitOptions{Bare: false}
+	defer repoStore.Close()
 
 	// Use provided branch name, or default to current branch
 	var targetBranch string
@@ -48,14 +48,14 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 		targetBranch = branchName
 	} else {
 		var err error
-		targetBranch, err = storage.ReadHEADBranch(repoPath, opts)
+		targetBranch, err = repostorage.ReadHEADBranchFromStore(repoStore)
 		if err != nil {
 			return []Commit{}, nil
 		}
 	}
 
 	// Get pushed commits for this branch
-	pushedCommits, err := storage.GetPushedCommits(repoPath, opts, targetBranch)
+	pushedCommits, err := repostorage.GetPushedCommitsFromStore(repoStore, targetBranch)
 	if err != nil {
 		return []Commit{}, err
 	}
@@ -71,7 +71,7 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 	}
 
 	// Read commits using GitClone storage, but only include pushed ones
-	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, targetBranch)
+	tipPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, targetBranch)
 	if err != nil || tipPtr == nil {
 		return []Commit{}, nil
 	}
@@ -81,7 +81,7 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 	count := 0
 
 	for count < limit {
-		c, err := storage.ReadCommitObject(repoPath, opts, id)
+		c, err := repostorage.ReadCommitObjectFromStore(repoStore, id)
 		if err != nil {
 			break
 		}
@@ -108,13 +108,16 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 
 // CreateCommit creates a new commit with the given message
 func (s *Service) CreateCommit(repoID, message string) error {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return err
 	}
+	defer repoStore.Close()
 
-	opts := storage.InitOptions{Bare: false}
-	stagedFiles, err := storage.GetStagedFiles(repoPath, opts)
+	repoPath := repoStore.RepoPath()
+
+	stagedFiles, err := repostorage.GetStagedFilesFromStore(repoStore)
 	if err != nil {
 		return fmt.Errorf("failed to check staged files: %w", err)
 	}
@@ -136,7 +139,7 @@ func (s *Service) CreateCommit(repoID, message string) error {
 	commands.Commit([]string{"-m", message})
 
 	// Clear staging area after successful commit
-	if err := storage.ClearIndex(repoPath, opts); err != nil {
+	if err := repostorage.ClearIndexFromStore(repoStore); err != nil {
 		// Log but don't fail the operation
 	}
 
@@ -146,16 +149,16 @@ func (s *Service) CreateCommit(repoID, message string) error {
 // PushCommits pushes commits to remote
 // Returns the number of commits pushed, or 0 if already up to date
 func (s *Service) PushCommits(repoID, branch string) (int, error) {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return 0, err
 	}
-
-	opts := storage.InitOptions{Bare: false}
+	defer repoStore.Close()
 
 	// Determine branch
 	if branch == "" {
-		currentBranch, err := storage.ReadHEADBranch(repoPath, opts)
+		currentBranch, err := repostorage.ReadHEADBranchFromStore(repoStore)
 		if err != nil {
 			branch = "main"
 		} else {
@@ -164,13 +167,13 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 	}
 
 	// Get current branch tip
-	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, branch)
+	tipPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, branch)
 	if err != nil || tipPtr == nil {
 		return 0, fmt.Errorf("no commits to push")
 	}
 
 	// Get already pushed commits
-	pushedCommits, err := storage.GetPushedCommits(repoPath, opts, branch)
+	pushedCommits, err := repostorage.GetPushedCommitsFromStore(repoStore, branch)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pushed commits: %w", err)
 	}
@@ -194,7 +197,7 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 
 		commitsToPush = append(commitsToPush, currentID)
 
-		c, err := storage.ReadCommitObject(repoPath, opts, currentID)
+		c, err := repostorage.ReadCommitObjectFromStore(repoStore, currentID)
 		if err != nil {
 			break
 		}
@@ -211,12 +214,12 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 
 	// Push commits (mark as pushed)
 	for _, commitID := range commitsToPush {
-		if err := storage.PushCommit(repoPath, opts, branch, commitID); err != nil {
+		if err := repostorage.PushCommitFromStore(repoStore, branch, commitID); err != nil {
 			return 0, fmt.Errorf("failed to push commit %d: %w", commitID, err)
 		}
 	}
 
-	// Update metadata commit count
+	// Update metadata commit count (using global store for repo registry)
 	meta, err := s.metaStore.GetRepo(repoID)
 	if err == nil {
 		commits, _ := s.ListCommits(repoID, branch, 100)
