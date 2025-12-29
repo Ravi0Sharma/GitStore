@@ -4,10 +4,10 @@ import (
 	"os"
 	"time"
 
-	"gitclone/internal/app/repos"
 	"gitclone/internal/commands"
+	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
-	"gitclone/internal/storage"
+	repostorage "gitclone/internal/storage"
 )
 
 // Branch represents a git branch
@@ -32,13 +32,14 @@ func NewService(repoBase string, metaStore *metadata.Store) *Service {
 
 // ListBranches returns all branches for a repository
 func (s *Service) ListBranches(repoID string) ([]Branch, error) {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return nil, err
 	}
+	defer repoStore.Close()
 
-	opts := storage.InitOptions{Bare: false}
-	branchNames, err := storage.ListBranches(repoPath, opts)
+	branchNames, err := repostorage.ListBranchesFromStore(repoStore)
 	if err != nil {
 		return nil, err
 	}
@@ -66,10 +67,14 @@ func (s *Service) ListBranches(repoID string) ([]Branch, error) {
 
 // Checkout switches to a branch, creating it if it doesn't exist
 func (s *Service) Checkout(repoID, branchName string) error {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return err
 	}
+	defer repoStore.Close()
+
+	repoPath := repoStore.RepoPath()
 
 	oldDir, err := os.Getwd()
 	if err != nil {
@@ -83,7 +88,7 @@ func (s *Service) Checkout(repoID, branchName string) error {
 
 	commands.Checkout([]string{branchName})
 
-	// Update metadata
+	// Update metadata (using global store for repo registry)
 	meta, err := s.metaStore.GetRepo(repoID)
 	if err == nil {
 		// Reload branch info

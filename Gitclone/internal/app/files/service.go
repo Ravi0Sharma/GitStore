@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"gitclone/internal/app/repos"
-	"gitclone/internal/storage"
+	"gitclone/internal/infra/storage"
+	repostorage "gitclone/internal/storage"
 )
 
 // Service handles file operations
@@ -23,10 +23,14 @@ func NewService(repoBase string) *Service {
 
 // StageFiles stages files for commit
 func (s *Service) StageFiles(repoID, path string) error {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return err
 	}
+	defer repoStore.Close()
+
+	repoPath := repoStore.RepoPath()
 
 	oldDir, err := os.Getwd()
 	if err != nil {
@@ -50,7 +54,7 @@ func (s *Service) StageFiles(repoID, path string) error {
 				return nil
 			}
 			if info.IsDir() {
-				if info.Name() == storage.RepoDir {
+				if info.Name() == ".gitclone" {
 					return filepath.SkipDir
 				}
 				return nil
@@ -68,8 +72,7 @@ func (s *Service) StageFiles(repoID, path string) error {
 		pathsToStage = []string{path}
 	}
 
-	opts := storage.InitOptions{Bare: false}
-	if err := storage.AddToIndex(repoPath, opts, pathsToStage); err != nil {
+	if err := repostorage.AddToIndexFromStore(repoStore, pathsToStage); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
@@ -78,11 +81,14 @@ func (s *Service) StageFiles(repoID, path string) error {
 
 // WriteFile writes content to a file in the repository
 func (s *Service) WriteFile(repoID, filePath string, content []byte) error {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
+	// Open per-repo store (to validate repo exists)
+	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
 	if err != nil {
 		return err
 	}
+	defer repoStore.Close()
 
+	repoPath := repoStore.RepoPath()
 	fullPath := filepath.Join(repoPath, filePath)
 
 	// Ensure directory exists
