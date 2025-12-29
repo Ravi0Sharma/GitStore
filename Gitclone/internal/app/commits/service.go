@@ -1,9 +1,14 @@
 package commits
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"GitDb"
 	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
 	repostorage "gitclone/internal/storage"
@@ -52,28 +57,18 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 		}
 	}
 
-	// Get pushed commits for this branch
-	pushedCommits, err := repostorage.GetPushedCommitsFromStore(repoStore, targetBranch)
+	// Read from remote ref (refs/remotes/origin/<branch>) - this is the pushed state
+	// If branch hasn't been pushed yet, return empty list
+	tipPtr, err := repostorage.ReadRemoteRefFromStore(repoStore, targetBranch)
 	if err != nil {
 		return []Commit{}, err
 	}
-
-	if len(pushedCommits) == 0 {
+	if tipPtr == nil {
+		// Branch hasn't been pushed yet - no commits to show
 		return []Commit{}, nil
 	}
 
-	// Create a map for quick lookup
-	pushedMap := make(map[int]bool)
-	for _, id := range pushedCommits {
-		pushedMap[id] = true
-	}
-
-	// Read commits using GitClone storage, but only include pushed ones
-	tipPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, targetBranch)
-	if err != nil || tipPtr == nil {
-		return []Commit{}, nil
-	}
-
+	// Walk commit history from remote ref tip
 	var commits []Commit
 	id := *tipPtr
 	count := 0
@@ -84,16 +79,14 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 			break
 		}
 
-		// Only include pushed commits
-		if pushedMap[c.ID] {
-			commits = append(commits, Commit{
-				Hash:    fmt.Sprintf("%d", c.ID),
-				Message: c.Message,
-				Author:  "system", // TODO: get from commit
-				Date:    time.Unix(c.Timestamp, 0).Format(time.RFC3339),
-			})
-			count++
-		}
+		// All commits from remote ref are pushed commits
+		commits = append(commits, Commit{
+			Hash:    fmt.Sprintf("%d", c.ID),
+			Message: c.Message,
+			Author:  "system", // TODO: get from commit
+			Date:    time.Unix(c.Timestamp, 0).Format(time.RFC3339),
+		})
+		count++
 
 		if c.Parent == nil {
 			break
@@ -113,14 +106,85 @@ func (s *Service) CreateCommit(repoID, message string) error {
 	}
 	defer repoStore.Close()
 
+	// Debug: log repo info - verify DB path matches StageFiles
+	repoPath := repoStore.RepoPath()
+	dbPath := filepath.Join(repoPath, ".gitclone", "db")
+	log.Printf("DEBUG CreateCommit: repoID=%s, repoBase=%s, repoPath=%s, dbPath=%s", 
+		repoID, s.repoBase, repoPath, dbPath)
+	
+	// Verify RepoStore DB path matches expected
+	actualDBPath := filepath.Join(repoStore.RepoPath(), ".gitclone", "db")
+	log.Printf("DEBUG CreateCommit: RepoStore.RepoPath()=%s, actualDBPath=%s", repoStore.RepoPath(), actualDBPath)
+
 	// Check if there are staged entries
-	hasStaged, err := repostorage.HasStagedEntriesFromStore(repoStore)
+	entries, err := repostorage.GetIndexEntriesFromStore(repoStore)
 	if err != nil {
+		log.Printf("DEBUG CreateCommit: error getting index entries: %v", err)
 		return fmt.Errorf("failed to check staged entries: %w", err)
 	}
-
+	
+	stagedCount := len(entries)
+	log.Printf("DEBUG CreateCommit: staged entries count: %d", stagedCount)
+	
+	// Debug: scan DB directly to see all index/entries/* keys
+	db := repoStore.DB()
+	allIndexKeys := make([]string, 0)
+	const indexEntriesPrefix = "index/entries/"
+	err = db.Scan(func(record GitDb.Record) error {
+		if strings.HasPrefix(record.Key, indexEntriesPrefix) {
+			allIndexKeys = append(allIndexKeys, record.Key)
+			// Try to unmarshal to check blobId
+			var entry repostorage.IndexEntry
+			if err := json.Unmarshal(record.Value, &entry); err == nil {
+				log.Printf("DEBUG CreateCommit: found key=%s, blobId=%q, mode=%q", 
+					record.Key, entry.BlobID, entry.Mode)
+			} else {
+				log.Printf("DEBUG CreateCommit: found key=%s, unmarshal error: %v", record.Key, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("DEBUG CreateCommit: error scanning DB: %v", err)
+	}
+	log.Printf("DEBUG CreateCommit: total index/entries/* keys in DB: %d", len(allIndexKeys))
+	
+	// Log a few entry keys for debugging
+	if stagedCount > 0 {
+		listed := 0
+		for p := range entries {
+			log.Printf("DEBUG CreateCommit: staged path: %s", p)
+			listed++
+			if listed >= 5 {
+				break
+			}
+		}
+	} else {
+		log.Printf("DEBUG CreateCommit: WARNING - no staged entries found!")
+		// Try to scan DB directly to see what keys exist
+		db := repoStore.DB()
+		var allKeys []string
+		var indexKeys []string
+		_ = db.Scan(func(record GitDb.Record) error {
+			allKeys = append(allKeys, record.Key)
+			if strings.HasPrefix(record.Key, "index/entries/") {
+				indexKeys = append(indexKeys, record.Key)
+			}
+			return nil
+		})
+		log.Printf("DEBUG CreateCommit: total keys in DB: %d, index/entries/* keys: %d", len(allKeys), len(indexKeys))
+		if len(indexKeys) > 0 {
+			for i, k := range indexKeys {
+				if i < 5 {
+					log.Printf("DEBUG CreateCommit: found index key: %s", k)
+				}
+			}
+		}
+	}
+	
+	hasStaged := stagedCount > 0
 	if !hasStaged {
-		return fmt.Errorf("nothing to commit. Stage changes first with 'gitclone add'")
+		return fmt.Errorf("Nothing to commit. Stage changes first with 'git add <path>' or 'gitclone add <path>'")
 	}
 
 	// Get current branch
@@ -198,32 +262,34 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 		}
 	}
 
-	// Get current branch tip
-	tipPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, branch)
-	if err != nil || tipPtr == nil {
+	// Get current branch tip (refs/heads/<branch>)
+	headTipPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, branch)
+	if err != nil || headTipPtr == nil {
 		return 0, fmt.Errorf("no commits to push")
 	}
 
-	// Get already pushed commits
-	pushedCommits, err := repostorage.GetPushedCommitsFromStore(repoStore, branch)
+	// Get current remote ref (refs/remotes/origin/<branch>)
+	remoteTipPtr, err := repostorage.ReadRemoteRefFromStore(repoStore, branch)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get pushed commits: %w", err)
+		return 0, fmt.Errorf("failed to get remote ref: %w", err)
 	}
 
-	// Find commits that need to be pushed (walk from tip to last pushed commit)
+	// If remote ref doesn't exist or is behind, push all commits from head to remote
+	// Push sets: refs/remotes/origin/<branch> = refs/heads/<branch>
+	headTip := *headTipPtr
+
+	// Check if already up to date
+	if remoteTipPtr != nil && *remoteTipPtr == headTip {
+		return 0, nil // Already up to date
+	}
+
+	// Count commits to push (walk from head tip to remote tip or root)
 	var commitsToPush []int
-	currentID := *tipPtr
+	currentID := headTip
 
 	for {
-		isPushed := false
-		for _, id := range pushedCommits {
-			if id == currentID {
-				isPushed = true
-				break
-			}
-		}
-
-		if isPushed {
+		// Stop if we've reached the remote tip (if it exists)
+		if remoteTipPtr != nil && currentID == *remoteTipPtr {
 			break
 		}
 
@@ -244,11 +310,13 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 		return 0, nil // Already up to date
 	}
 
-	// Push commits (mark as pushed)
-	for _, commitID := range commitsToPush {
-		if err := repostorage.PushCommitFromStore(repoStore, branch, commitID); err != nil {
-			return 0, fmt.Errorf("failed to push commit %d: %w", commitID, err)
-		}
+	// Push: set remote ref to head ref (atomic write)
+	batch := repoStore.NewWriteBatch()
+	if err := repostorage.WriteRemoteRefToBatch(batch, branch, headTip); err != nil {
+		return 0, fmt.Errorf("failed to add remote ref to batch: %w", err)
+	}
+	if err := batch.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit push: %w", err)
 	}
 
 	// Update metadata commit count (using global store for repo registry)

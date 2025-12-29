@@ -51,11 +51,27 @@ func (db *DB) rebuildIndex() error {
 }
 
 // Close shuts down the database
+// Since Put() already appends to the log file, Close() ensures the in-memory log
+// matches the file by writing it (which should be identical if no errors occurred).
+// This also ensures any buffered writes are flushed.
 func (db *DB) Close() error {
 	if err := os.MkdirAll(filepath.Dir(db.logPath), 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
-	return os.WriteFile(db.logPath, db.log, 0644)
+	// Write in-memory log to file
+	// Since Put() already appends to file, this should write the same data
+	// but ensures consistency and flushes any buffered writes
+	if err := os.WriteFile(db.logPath, db.log, 0644); err != nil {
+		return fmt.Errorf("failed to write log file: %w", err)
+	}
+	// Sync to ensure writes are persisted to disk
+	// This is important for crash-safety
+	file, err := os.OpenFile(db.logPath, os.O_RDWR, 0644)
+	if err == nil {
+		file.Sync()
+		file.Close()
+	}
+	return nil
 }
 
 // Append record to the log and update the index
@@ -78,9 +94,18 @@ func (db *DB) Put(key string, value []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
-	defer file.Close()
 	if _, err := file.Write(encoded); err != nil {
+		file.Close()
 		return fmt.Errorf("failed to write to log file: %w", err)
+	}
+	// Sync to ensure write is persisted to disk immediately
+	// This is critical for ensuring writes are visible when a new DB instance is opened
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("failed to sync log file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close log file: %w", err)
 	}
 	return nil
 }

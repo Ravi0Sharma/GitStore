@@ -36,13 +36,20 @@ func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID st
 	if path == "" {
 		path = "."
 	}
-	if err := s.fileSvc.StageFiles(repoID, path); err != nil {
+	
+	// Stage files and get staged entries info
+	stagedCount, stagedPaths, err := s.fileSvc.StageFilesWithInfo(repoID, path)
+	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	// Write output
-	RespondJSON(w, http.StatusOK, map[string]string{"message": fmt.Sprintf("Files staged: %s", path)})
+	// Return staged info in response
+	RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":     fmt.Sprintf("Files staged: %s", path),
+		"stagedCount": stagedCount,
+		"stagedPaths": stagedPaths,
+	})
 }
 
 // handleRepoFiles handles POST /api/repos/:id/files

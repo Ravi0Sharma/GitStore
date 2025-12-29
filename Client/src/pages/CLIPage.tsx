@@ -176,10 +176,34 @@ Current branch: ${repo?.currentBranch || 'main'}
             try {
               // Path is optional, default to "." (all changes)
               const path = args[1] || '.';
-              await api.add(repoId, path);
-              output = `Staged files: ${path === '.' ? 'all changes' : path}`;
+              
+              // Debug: log command parsing
+              console.log(`[CLI DEBUG] Parsed command: git add ${path}`);
+              console.log(`[CLI DEBUG] Calling api.add(${repoId}, ${path}) -> POST /api/repos/${repoId}/add`);
+              
+              // Await add to ensure it completes before any subsequent commands
+              const result = await api.add(repoId, path);
+              
+              // Debug: log result
+              console.log(`[CLI DEBUG] Add result: stagedCount=${result.stagedCount}, stagedPaths=${result.stagedPaths.length}`);
+              
+              // Show actual staged info from API response
+              if (result.stagedCount === 0) {
+                output = `Error: No files were staged. Make sure the path exists and contains files.`;
+              } else {
+                output = `Staged ${result.stagedCount} file(s)\n`;
+                // Show first few staged paths
+                const pathsToShow = result.stagedPaths.slice(0, 5);
+                pathsToShow.forEach(p => {
+                  output += `  ${p}\n`;
+                });
+                if (result.stagedCount > 5) {
+                  output += `  ... and ${result.stagedCount - 5} more\n`;
+                }
+              }
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : 'Failed to stage files';
+              console.error(`[CLI DEBUG] Add error:`, error);
               output = `Error: ${errorMsg}\n`;
               if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
                 output += `\nPossible issues:\n`;
@@ -198,10 +222,17 @@ Current branch: ${repo?.currentBranch || 'main'}
             }
             try {
               const message = args.slice(2).join(' ');
+              
+              // Debug: log command parsing
+              console.log(`[CLI DEBUG] Parsed command: git commit -m "${message}"`);
+              console.log(`[CLI DEBUG] Calling api.commit(${repoId}, "${message}") -> POST /api/repos/${repoId}/commit`);
+              
+              // Await commit - this will only run after previous commands complete
               await api.commit(repoId, message);
               output = `Commit created successfully (local only)!\nMessage: ${message}`;
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : 'Failed to create commit';
+              console.error(`[CLI DEBUG] Commit error:`, error);
               output = `Error: ${errorMsg}`;
               if (errorMsg.includes('Nothing to commit') || errorMsg.includes('Stage changes')) {
                 output += `\n\nStage changes first with 'git add <path>' before committing.`;
@@ -296,10 +327,11 @@ Current branch: ${repo?.currentBranch || 'main'}
             // Join all remaining args as content, preserving spaces
             const content = args.slice(2).join(' ') || '';
             
-            if (import.meta.env.DEV) {
-              console.log(`Creating file: ${filePath} in repo: ${repoId}`);
-            }
+            // Debug: log command parsing
+            console.log(`[CLI DEBUG] Parsed command: create file ${filePath}`);
+            console.log(`[CLI DEBUG] Calling api.createOrEditFile(${repoId}, ${filePath}, ...) -> POST /api/repos/${repoId}/files`);
             
+            // Await file creation to ensure it completes before subsequent commands
             await api.createOrEditFile(repoId, filePath, content);
             output = `File created: ${filePath}\n`;
             if (content) {

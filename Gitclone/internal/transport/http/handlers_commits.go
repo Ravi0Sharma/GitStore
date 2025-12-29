@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"gitclone/internal/app/repos"
 )
@@ -82,11 +83,15 @@ func (s *Server) handleRepoCommit(w http.ResponseWriter, r *http.Request, repoID
 	// Call service
 	if err := s.commitSvc.CreateCommit(repoID, req.Message); err != nil {
 		// Check if it's a business logic error (no staged files)
-		if err.Error() == "nothing to commit. Stage changes first with 'git add <path>'" {
-			RespondJSON(w, http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		// Return 400 (Bad Request) instead of 500 for user errors
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "Nothing to commit") || strings.Contains(errMsg, "Stage changes first") {
+			RespondJSON(w, http.StatusBadRequest, ErrorResponse{Error: errMsg})
 			return
 		}
-		RespondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		// Other errors are server errors
+		log.Printf("ERROR handleRepoCommit: repoID=%s, error=%v", repoID, err)
+		RespondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: errMsg})
 		return
 	}
 

@@ -312,7 +312,8 @@ func TestBuildTreeFromIndex_EmptyIndex(t *testing.T) {
 		t.Fatal("Expected error when building tree from empty index")
 	}
 
-	if err.Error() != "nothing to commit. Stage changes first with 'gitclone add'" {
+	expectedErr := "Nothing to commit. Stage changes first with 'git add <path>' or 'gitclone add <path>'"
+	if err.Error() != expectedErr {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }

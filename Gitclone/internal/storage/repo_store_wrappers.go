@@ -3,6 +3,8 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -102,9 +104,16 @@ func GetIndexEntriesFromStore(store *repostorage.RepoStore) (map[string]IndexEnt
 				return nil // Skip invalid entries
 			}
 
-			// Only include entries with valid blobId
+			// Since GitDb is append-only, Scan() iterates through all entries in order
+			// For the same key, later entries overwrite earlier ones in the map
+			// We only include entries with valid blobId (skip cleared entries with empty blobId)
+			// But we need to check: if we've already seen this path with a valid blobId,
+			// and now we see it with an empty blobId, we should remove it from the map
 			if entry.BlobID != "" {
 				entries[path] = entry
+			} else {
+				// Empty blobId means cleared - remove from map if it exists
+				delete(entries, path)
 			}
 		}
 		return nil
@@ -114,10 +123,94 @@ func GetIndexEntriesFromStore(store *repostorage.RepoStore) (map[string]IndexEnt
 }
 
 // AddToIndexFromStore adds files to staging area using RepoStore
+// This uses the RepoStore's DB directly to ensure consistency with other operations
 func AddToIndexFromStore(store *repostorage.RepoStore, path string) error {
 	repoPath := store.RepoPath()
-	options := InitOptions{Bare: false}
-	return AddToIndex(repoPath, options, path)
+	db := store.DB()
+
+	// Normalize path
+	normalizedPath := filepath.Clean(path)
+	if normalizedPath == "." {
+		// Stage all files in repo (except .gitclone)
+		return addAllFilesToIndexFromStore(repoPath, db)
+	}
+
+	// Stage single file or directory
+	fullPath := filepath.Join(repoPath, normalizedPath)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return fmt.Errorf("file not found: %s", normalizedPath)
+	}
+
+	if info.IsDir() {
+		// Recursively add all files in directory
+		return addDirectoryToIndexFromStore(repoPath, normalizedPath, db)
+	}
+
+	// Add single file
+	return addFileToIndex(repoPath, normalizedPath, db)
+}
+
+// addAllFilesToIndexFromStore stages all files in repo using provided DB
+func addAllFilesToIndexFromStore(root string, db *GitDb.DB) error {
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip .gitclone directory
+		if info.IsDir() && filepath.Base(path) == ".gitclone" {
+			return filepath.SkipDir
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+
+		// Normalize: remove leading ./ and convert to forward slashes
+		relPath = filepath.Clean(relPath)
+		relPath = filepath.ToSlash(relPath)
+		// Remove leading ./ if present
+		if strings.HasPrefix(relPath, "./") {
+			relPath = relPath[2:]
+		}
+
+		return addFileToIndex(root, relPath, db)
+	})
+}
+
+// addDirectoryToIndexFromStore recursively stages all files in a directory using provided DB
+func addDirectoryToIndexFromStore(root, relPath string, db *GitDb.DB) error {
+	fullPath := filepath.Join(root, relPath)
+	return filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip .gitclone directory
+		if info.IsDir() && filepath.Base(path) == RepoDir {
+			return filepath.SkipDir
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+
+		// Normalize path separators to forward slashes
+		rel = filepath.ToSlash(rel)
+
+		return addFileToIndex(root, rel, db)
+	})
 }
 
 // ClearIndexFromStore clears staging area using RepoStore
@@ -144,59 +237,42 @@ func HasStagedEntriesFromStore(store *repostorage.RepoStore) (bool, error) {
 	return false, nil
 }
 
-// GetPushedCommitsFromStore returns pushed commits for a branch using RepoStore
-func GetPushedCommitsFromStore(store *repostorage.RepoStore, branch string) ([]int, error) {
+// ReadRemoteRefFromStore reads commit ID from refs/remotes/origin/<branch> using RepoStore
+// Returns nil if branch has no remote ref (not pushed yet)
+func ReadRemoteRefFromStore(store *repostorage.RepoStore, branch string) (*int, error) {
 	db := store.DB()
-	key := fmt.Sprintf("remote/%s/commits", branch)
+	key := "refs/remotes/origin/" + branch
 	data, err := db.Get(key)
 	if err != nil {
-		// No pushed commits yet
-		return []int{}, nil
+		// Remote ref doesn't exist - branch hasn't been pushed yet
+		return nil, nil
 	}
-
-	var commitIDs []int
-	if err := json.Unmarshal(data, &commitIDs); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal pushed commits: %w", err)
+	
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		return nil, nil
 	}
-
-	return commitIDs, nil
+	
+	commitID, err := strconv.Atoi(content)
+	if err != nil {
+		return nil, fmt.Errorf("invalid commit ID in remote ref: %w", err)
+	}
+	
+	return &commitID, nil
 }
 
-// PushCommitFromStore marks a commit as pushed using RepoStore
-func PushCommitFromStore(store *repostorage.RepoStore, branch string, commitID int) error {
+// WriteRemoteRefFromStore writes commit ID into refs/remotes/origin/<branch> using RepoStore
+func WriteRemoteRefFromStore(store *repostorage.RepoStore, branch string, commitID int) error {
 	db := store.DB()
-	
-	// Read current remote commits for branch
-	key := fmt.Sprintf("remote/%s/commits", branch)
-	remoteData, err := db.Get(key)
-	var pushedCommits []int
-	if err != nil {
-		// No remote commits yet, create new
-		pushedCommits = []int{}
-	} else {
-		if err := json.Unmarshal(remoteData, &pushedCommits); err != nil {
-			return fmt.Errorf("failed to unmarshal remote commits: %w", err)
-		}
-	}
+	key := "refs/remotes/origin/" + branch
+	return db.Put(key, []byte(fmt.Sprintf("%d\n", commitID)))
+}
 
-	// Check if commit is already pushed
-	for _, id := range pushedCommits {
-		if id == commitID {
-			// Already pushed
-			return nil
-		}
-	}
-
-	// Add commit to pushed list
-	pushedCommits = append(pushedCommits, commitID)
-
-	// Write back
-	data, err := json.Marshal(pushedCommits)
-	if err != nil {
-		return fmt.Errorf("failed to marshal remote commits: %w", err)
-	}
-
-	return db.Put(key, data)
+// WriteRemoteRefToBatch writes remote ref to a batch
+func WriteRemoteRefToBatch(batch *repostorage.WriteBatch, branch string, commitID int) error {
+	key := "refs/remotes/origin/" + branch
+	batch.Put(key, []byte(fmt.Sprintf("%d\n", commitID)))
+	return nil
 }
 
 // ReadCommitObjectFromStore reads a commit object using RepoStore

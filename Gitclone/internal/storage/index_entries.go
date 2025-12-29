@@ -86,8 +86,13 @@ func addFileToIndex(root, relPath string, db *GitDb.DB) error {
 		return fmt.Errorf("failed to store blob: %w", err)
 	}
 
-	// Normalize path separators to forward slashes for consistency
-	normalizedRelPath := filepath.ToSlash(relPath)
+	// Normalize path: clean, convert to forward slashes, remove leading ./
+	normalizedRelPath := filepath.Clean(relPath)
+	normalizedRelPath = filepath.ToSlash(normalizedRelPath)
+	// Remove leading ./ if present
+	if strings.HasPrefix(normalizedRelPath, "./") {
+		normalizedRelPath = normalizedRelPath[2:]
+	}
 
 	// Store index entry: index/entries/<path> -> {blobId, mode}
 	entryKey := fmt.Sprintf("index/entries/%s", normalizedRelPath)
