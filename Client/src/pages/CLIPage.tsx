@@ -13,7 +13,7 @@ interface CommandHistory {
 
 const CLIPage = () => {
   const { repoId } = useParams<{ repoId: string }>();
-  const { getRepository } = useGit();
+  const { getRepository, loadRepositories } = useGit();
   const navigate = useNavigate();
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<CommandHistory[]>([]);
@@ -76,14 +76,20 @@ Git commands (via API):
   git branch              - List branches
   git log                 - Show commit log
   git add [path]          - Stage files (default: ".")
-  git commit -m "message" - Commit changes
+  git commit -m "message" - Commit changes (requires staged files)
   git push [remote] [branch] - Push to remote (default: origin, current branch)
+
+Workflow:
+  1. create file <path> [content]  - Create a file
+  2. git add <path>                - Stage the file
+  3. git commit -m "message"       - Commit (local only)
+  4. git push                      - Push to remote (then visible in UI)
 
 Examples:
   create file text.txt Hello World
-  edit file text.txt Updated content
-  git add .
+  git add text.txt
   git commit -m "Add test file"
+  git push
 
 Repository: ${repo?.name || repoId}
 Current branch: ${repo?.currentBranch || 'main'}
@@ -171,8 +177,7 @@ Current branch: ${repo?.currentBranch || 'main'}
               // Path is optional, default to "." (all changes)
               const path = args[1] || '.';
               await api.add(repoId, path);
-              output = `Staged files: ${path === '.' ? 'all changes' : path}\n`;
-              output += `You can now use 'git commit -m "message"' to commit these changes.`;
+              output = `Staged files: ${path === '.' ? 'all changes' : path}`;
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : 'Failed to stage files';
               output = `Error: ${errorMsg}\n`;
@@ -194,9 +199,13 @@ Current branch: ${repo?.currentBranch || 'main'}
             try {
               const message = args.slice(2).join(' ');
               await api.commit(repoId, message);
-              output = `Commit created successfully!\nMessage: ${message}`;
+              output = `Commit created successfully (local only)!\nMessage: ${message}`;
             } catch (error) {
-              output = `Error: ${error instanceof Error ? error.message : 'Failed to create commit'}`;
+              const errorMsg = error instanceof Error ? error.message : 'Failed to create commit';
+              output = `Error: ${errorMsg}`;
+              if (errorMsg.includes('Nothing to commit') || errorMsg.includes('Stage changes')) {
+                output += `\n\nStage changes first with 'git add <path>' before committing.`;
+              }
             }
           } else if (args[0] === 'push') {
             if (!repoId) {
@@ -207,7 +216,13 @@ Current branch: ${repo?.currentBranch || 'main'}
               const remote = args[1] || 'origin';
               const branch = args[2] || repo?.currentBranch || 'main';
               await api.push(repoId, remote, branch);
-              output = `Pushed to ${remote}/${branch} successfully!`;
+              output = `Pushed to ${remote}/${branch} successfully!\nCommits are now visible in the repository.`;
+              // Refresh repository data after push (commits will be updated)
+              try {
+                await loadRepositories();
+              } catch (err) {
+                // Ignore errors - commits will refresh when user navigates back to repo page
+              }
             } catch (error) {
               output = `Error: ${error instanceof Error ? error.message : 'Failed to push'}`;
             }
@@ -292,7 +307,6 @@ Current branch: ${repo?.currentBranch || 'main'}
             } else {
               output += `(empty file)\n`;
             }
-            output += `You can now use 'git commit -m "message"' to commit this file.`;
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to create file';
             console.error('Error creating file:', error);
@@ -335,11 +349,10 @@ Current branch: ${repo?.currentBranch || 'main'}
             await api.createOrEditFile(repoId, filePath, content);
             output = `File updated: ${filePath}\n`;
             if (content) {
-              output += `Content: "${content}"\n`;
+              output += `Content: "${content}"`;
             } else {
-              output += `(file cleared)\n`;
+              output += `(file cleared)`;
             }
-            output += `You can now use 'git commit -m "message"' to commit this file.`;
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Failed to edit file';
             console.error('Error editing file:', error);
