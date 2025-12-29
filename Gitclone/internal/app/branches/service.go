@@ -2,8 +2,12 @@ package branches
 
 import (
 	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"GitDb"
 	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
 	repostorage "gitclone/internal/storage"
@@ -38,9 +42,31 @@ func (s *Service) ListBranches(repoID string) ([]Branch, error) {
 	}
 	defer repoStore.Close()
 
+	// Debug: log repo info
+	repoPath := repoStore.RepoPath()
+	dbPath := filepath.Join(repoPath, ".gitclone", "db")
+	log.Printf("DEBUG ListBranches: repoID=%s, repoBase=%s, repoPath=%s, dbPath=%s", 
+		repoID, s.repoBase, repoPath, dbPath)
+
 	branchNames, err := repostorage.ListBranchesFromStore(repoStore)
 	if err != nil {
 		return nil, err
+	}
+
+	// Debug: log found branches
+	log.Printf("DEBUG ListBranches: found %d branches: %v", len(branchNames), branchNames)
+	
+	// Debug: scan DB directly to see all refs/heads/* keys
+	db := repoStore.DB()
+	allRefKeys := make([]string, 0)
+	err = db.Scan(func(record GitDb.Record) error {
+		if strings.HasPrefix(record.Key, "refs/heads/") {
+			allRefKeys = append(allRefKeys, record.Key)
+		}
+		return nil
+	})
+	if err == nil {
+		log.Printf("DEBUG ListBranches: all refs/heads/* keys in DB: %v", allRefKeys)
 	}
 
 	// Deduplicate branches by name
@@ -73,6 +99,12 @@ func (s *Service) Checkout(repoID, branchName string) error {
 	}
 	defer repoStore.Close()
 
+	// Debug: log repo info
+	repoPath := repoStore.RepoPath()
+	dbPath := filepath.Join(repoPath, ".gitclone", "db")
+	log.Printf("DEBUG Checkout: repoID=%s, repoBase=%s, repoPath=%s, dbPath=%s, branchName=%s", 
+		repoID, s.repoBase, repoPath, dbPath, branchName)
+
 	// Read current branch
 	currentBranch, err := repostorage.ReadHEADBranchFromStore(repoStore)
 	if err != nil {
@@ -84,12 +116,7 @@ func (s *Service) Checkout(repoID, branchName string) error {
 		return nil // Already on this branch
 	}
 
-	// Ensure target branch ref exists
-	if err := repostorage.EnsureHeadRefExistsFromStore(repoStore, branchName); err != nil {
-		return fmt.Errorf("failed to ensure branch exists: %w", err)
-	}
-
-	// Check if target branch is new (empty)
+	// Check if target branch exists (before batch)
 	targetTip, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, branchName)
 	if err != nil {
 		return fmt.Errorf("failed to read target branch tip: %w", err)
@@ -98,8 +125,11 @@ func (s *Service) Checkout(repoID, branchName string) error {
 	// Create write batch for atomic operation
 	batch := repoStore.NewWriteBatch()
 
-	// If target branch is new, copy current branch's tip
+	// Ensure target branch ref exists in batch (create empty ref if new)
+	// This is critical: even if branch is new and repo is empty, we must create the ref
 	if targetTip == nil {
+		// Branch doesn't exist yet - create it
+		// First, try to copy current branch's tip if it exists
 		currentTip, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, currentBranch)
 		if err != nil {
 			return fmt.Errorf("failed to read current branch tip: %w", err)
@@ -109,7 +139,15 @@ func (s *Service) Checkout(repoID, branchName string) error {
 			if err := repostorage.WriteHeadRefToBatch(batch, branchName, *currentTip); err != nil {
 				return fmt.Errorf("failed to add branch copy to batch: %w", err)
 			}
+			log.Printf("DEBUG Checkout: creating new branch %s with tip from %s (commit %d)", branchName, currentBranch, *currentTip)
+		} else {
+			// Empty repo - create empty ref (branch exists but has no commits)
+			key := "refs/heads/" + branchName
+			batch.Put(key, []byte(""))
+			log.Printf("DEBUG Checkout: creating new branch %s with empty ref (no commits yet)", branchName)
 		}
+	} else {
+		log.Printf("DEBUG Checkout: branch %s already exists with tip %d", branchName, *targetTip)
 	}
 
 	// Update HEAD to point to target branch
@@ -121,6 +159,8 @@ func (s *Service) Checkout(repoID, branchName string) error {
 	if err := batch.Commit(); err != nil {
 		return fmt.Errorf("failed to commit checkout batch: %w", err)
 	}
+
+	log.Printf("DEBUG Checkout: batch committed successfully, branch %s should now exist", branchName)
 
 	// Update metadata (using global store for repo registry)
 	meta, err := s.metaStore.GetRepo(repoID)
