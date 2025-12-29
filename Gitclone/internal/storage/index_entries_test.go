@@ -1,12 +1,21 @@
 package storage
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"GitDb"
 )
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func TestAddToIndex(t *testing.T) {
 	// Create temporary directory
@@ -28,28 +37,54 @@ func TestAddToIndex(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Stage the file
+	// Stage the file using AddToIndex
+	// This opens DB, writes entry, then closes DB
 	if err := AddToIndex(tmpDir, options, "test.txt"); err != nil {
 		t.Fatalf("Failed to add to index: %v", err)
 	}
 
-	// Verify entry exists (GetIndexEntries opens a new DB connection)
+	// Verify entry exists by opening a fresh DB connection
+	// This tests that writes are persisted across DB open/close cycles
 	entries, err := GetIndexEntries(tmpDir, options)
 	if err != nil {
 		t.Fatalf("Failed to get index entries: %v", err)
 	}
 
 	if len(entries) == 0 {
-		// Debug: Check what's in the database
+		// Debug: Check what's actually in the database
 		debugDB, _ := openDB(tmpDir, options)
 		defer debugDB.Close()
 
 		var allKeys []string
+		var indexEntryKeys []string
 		_ = debugDB.Scan(func(record GitDb.Record) error {
 			allKeys = append(allKeys, record.Key)
+			// Check if key starts with "index/entries/" (exactly 15 chars)
+			if len(record.Key) >= 15 && record.Key[:15] == "index/entries/" {
+				indexEntryKeys = append(indexEntryKeys, record.Key)
+				// Try to unmarshal to verify it's valid
+				var entry IndexEntry
+				if err := json.Unmarshal(record.Value, &entry); err == nil {
+					t.Logf("Found valid index entry: key=%q, blobId=%q, mode=%q", 
+						record.Key, entry.BlobID, entry.Mode)
+				} else {
+					t.Logf("Found index entry key but invalid JSON: key=%q, value=%q, err=%v", 
+						record.Key, string(record.Value), err)
+				}
+			} else if strings.Contains(record.Key, "index/entries") {
+				// Key contains "index/entries" but doesn't start with it - check actual bytes
+				prefix15 := record.Key[:min(15, len(record.Key))]
+				bytes15 := []byte(prefix15)
+				t.Logf("Key contains 'index/entries' but prefix mismatch: key=%q (len=%d), prefix15=%q, bytes15=%v, expected='index/entries/'", 
+					record.Key, len(record.Key), prefix15, bytes15)
+				// Check if it's actually "index/entries/" with different encoding
+				if record.Key == "index/entries/test.txt" {
+					t.Logf("Key IS 'index/entries/test.txt' but prefix15 check failed! This is a bug in the check.")
+				}
+			}
 			return nil
 		})
-		t.Fatalf("No entries found in index. All keys: %v", allKeys)
+		t.Fatalf("No entries found in index. All keys: %v, Index entry keys: %v", allKeys, indexEntryKeys)
 	}
 
 	entry, ok := entries["test.txt"]
@@ -160,17 +195,38 @@ func TestClearIndex(t *testing.T) {
 	}
 
 	// Clear index
+	// ClearIndex() writes empty entries (with empty blobId) for all index entry keys
+	// GitDb is append-only, so it writes new entries that update the index
+	// When we read, we should get the latest (empty) entries, which GetIndexEntries() filters out
 	if err := ClearIndex(tmpDir, options); err != nil {
 		t.Fatalf("Failed to clear index: %v", err)
 	}
 
 	// Verify no staged entries
+	// Note: ClearIndex() writes empty entries, which GetIndexEntries() filters out
+	// So HasStagedEntries() should return false after clear
 	hasStaged, err = HasStagedEntries(tmpDir, options)
 	if err != nil {
 		t.Fatalf("Failed to check staged entries: %v", err)
 	}
 	if hasStaged {
-		t.Error("Expected no staged entries after clear")
+		// Debug: check what entries still exist and what's in the DB
+		entries, _ := GetIndexEntries(tmpDir, options)
+		debugDB, _ := openDB(tmpDir, options)
+		defer debugDB.Close()
+		
+		var allIndexKeys []string
+		_ = debugDB.Scan(func(record GitDb.Record) error {
+			if strings.HasPrefix(record.Key, "index/entries/") {
+				allIndexKeys = append(allIndexKeys, record.Key)
+				var entry IndexEntry
+				if err := json.Unmarshal(record.Value, &entry); err == nil {
+					t.Logf("DB has index entry: key=%q, blobId=%q", record.Key, entry.BlobID)
+				}
+			}
+			return nil
+		})
+		t.Errorf("Expected no staged entries after clear, but found: %v. All index keys in DB: %v", entries, allIndexKeys)
 	}
 }
 

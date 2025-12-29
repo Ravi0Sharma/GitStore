@@ -92,9 +92,10 @@ func GetIndexEntriesFromStore(store *repostorage.RepoStore) (map[string]IndexEnt
 	entries := make(map[string]IndexEntry)
 
 	// Scan for all index/entries/* keys
+	const indexEntriesPrefix = "index/entries/"
 	err := db.Scan(func(record GitDb.Record) error {
-		if len(record.Key) > 15 && record.Key[:15] == "index/entries/" {
-			path := record.Key[15:] // Remove "index/entries/" prefix
+		if strings.HasPrefix(record.Key, indexEntriesPrefix) {
+			path := record.Key[len(indexEntriesPrefix):] // Remove "index/entries/" prefix
 
 			var entry IndexEntry
 			if err := json.Unmarshal(record.Value, &entry); err != nil {
