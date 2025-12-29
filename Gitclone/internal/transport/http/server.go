@@ -8,14 +8,20 @@ import (
 	"path/filepath"
 	"time"
 
+	"gitclone/internal/app/branches"
+	"gitclone/internal/app/commits"
+	"gitclone/internal/app/files"
 	"gitclone/internal/metadata"
 	"gitclone/internal/storage"
 )
 
 // Server holds the server dependencies
 type Server struct {
-	repoBase  string
-	metaStore *metadata.Store
+	repoBase   string
+	metaStore  *metadata.Store
+	branchSvc  *branches.Service
+	commitSvc  *commits.Service
+	fileSvc    *files.Service
 }
 
 // NewServer creates a new server instance
@@ -23,6 +29,9 @@ func NewServer(repoBase string, metaStore *metadata.Store) *Server {
 	return &Server{
 		repoBase:  repoBase,
 		metaStore: metaStore,
+		branchSvc: branches.NewService(repoBase, metaStore),
+		commitSvc: commits.NewService(repoBase, metaStore),
+		fileSvc:   files.NewService(repoBase),
 	}
 }
 
