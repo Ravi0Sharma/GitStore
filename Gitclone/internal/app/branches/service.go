@@ -1,10 +1,9 @@
 package branches
 
 import (
-	"os"
+	"fmt"
 	"time"
 
-	"gitclone/internal/commands"
 	"gitclone/internal/infra/storage"
 	"gitclone/internal/metadata"
 	repostorage "gitclone/internal/storage"
@@ -65,7 +64,7 @@ func (s *Service) ListBranches(repoID string) ([]Branch, error) {
 	return branches, nil
 }
 
-// Checkout switches to a branch, creating it if it doesn't exist
+// Checkout switches to a branch, creating it if it doesn't exist atomically
 func (s *Service) Checkout(repoID, branchName string) error {
 	// Open per-repo store
 	repoStore, err := storage.NewRepoStore(s.repoBase, repoID)
@@ -74,19 +73,54 @@ func (s *Service) Checkout(repoID, branchName string) error {
 	}
 	defer repoStore.Close()
 
-	repoPath := repoStore.RepoPath()
-
-	oldDir, err := os.Getwd()
+	// Read current branch
+	currentBranch, err := repostorage.ReadHEADBranchFromStore(repoStore)
 	if err != nil {
-		return err
-	}
-	defer os.Chdir(oldDir)
-
-	if err := os.Chdir(repoPath); err != nil {
-		return err
+		return fmt.Errorf("failed to read current branch: %w", err)
 	}
 
-	commands.Checkout([]string{branchName})
+	// Check if same branch
+	if branchName == currentBranch {
+		return nil // Already on this branch
+	}
+
+	// Ensure target branch ref exists
+	if err := repostorage.EnsureHeadRefExistsFromStore(repoStore, branchName); err != nil {
+		return fmt.Errorf("failed to ensure branch exists: %w", err)
+	}
+
+	// Check if target branch is new (empty)
+	targetTip, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, branchName)
+	if err != nil {
+		return fmt.Errorf("failed to read target branch tip: %w", err)
+	}
+
+	// Create write batch for atomic operation
+	batch := repoStore.NewWriteBatch()
+
+	// If target branch is new, copy current branch's tip
+	if targetTip == nil {
+		currentTip, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, currentBranch)
+		if err != nil {
+			return fmt.Errorf("failed to read current branch tip: %w", err)
+		}
+		if currentTip != nil {
+			// Copy current tip to new branch
+			if err := repostorage.WriteHeadRefToBatch(batch, branchName, *currentTip); err != nil {
+				return fmt.Errorf("failed to add branch copy to batch: %w", err)
+			}
+		}
+	}
+
+	// Update HEAD to point to target branch
+	if err := repostorage.WriteHEADBranchToBatch(batch, branchName); err != nil {
+		return fmt.Errorf("failed to add HEAD update to batch: %w", err)
+	}
+
+	// Commit batch atomically
+	if err := batch.Commit(); err != nil {
+		return fmt.Errorf("failed to commit checkout batch: %w", err)
+	}
 
 	// Update metadata (using global store for repo registry)
 	meta, err := s.metaStore.GetRepo(repoID)

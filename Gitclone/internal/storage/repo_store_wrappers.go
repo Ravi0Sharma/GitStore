@@ -54,7 +54,7 @@ func ReadHeadRefMaybeFromStore(store *repostorage.RepoStore, branch string) (*in
 	key := "refs/heads/" + branch
 	data, err := db.Get(key)
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	
 	// Parse commit ID
@@ -221,8 +221,68 @@ func ReadCommitObjectFromStore(store *repostorage.RepoStore, commitID int) (Comm
 	return c, nil
 }
 
+// WriteCommitObjectToBatch writes a commit object to a batch
+func WriteCommitObjectToBatch(batch *repostorage.WriteBatch, commit Commit) error {
+	data, err := json.MarshalIndent(commit, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal commit: %w", err)
+	}
+	
+	key := fmt.Sprintf("objects/%d", commit.ID)
+	batch.Put(key, data)
+	return nil
+}
+
+// NextCommitIDFromStore gets and increments the next commit ID
+func NextCommitIDFromStore(store *repostorage.RepoStore) (int, error) {
+	db := store.DB()
+	
+	// Read current value
+	b, err := db.Get("meta/NEXT_COMMIT_ID")
+	if err != nil {
+		return 0, err
+	}
+
+	curStr := strings.TrimSpace(string(b))
+	cur, err := strconv.Atoi(curStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid NEXT_COMMIT_ID: %q", curStr)
+	}
+
+	// Write incremented value
+	if err := db.Put("meta/NEXT_COMMIT_ID", []byte(fmt.Sprintf("%d\n", cur+1))); err != nil {
+		return 0, err
+	}
+
+	return cur, nil
+}
+
+// WriteHeadRefToBatch writes a branch ref to a batch
+func WriteHeadRefToBatch(batch *repostorage.WriteBatch, branch string, commitID int) error {
+	// Ensure ref exists first (check if it exists, if not add empty)
+	key := "refs/heads/" + branch
+	batch.Put(key, []byte(fmt.Sprintf("%d\n", commitID)))
+	return nil
+}
+
+// WriteHEADBranchToBatch writes HEAD to a batch
+func WriteHEADBranchToBatch(batch *repostorage.WriteBatch, branch string) error {
+	content := "ref: refs/heads/" + branch + "\n"
+	batch.Put("meta/HEAD", []byte(content))
+	return nil
+}
+
+// ClearIndexToBatch clears the index in a batch
+func ClearIndexToBatch(batch *repostorage.WriteBatch) error {
+	data, err := json.Marshal([]string{})
+	if err != nil {
+		return fmt.Errorf("failed to marshal index: %w", err)
+	}
+	batch.Put("index/staged", data)
+	return nil
+}
+
 // EnsureHeadRefExistsFromStore ensures HEAD ref exists using RepoStore
 func EnsureHeadRefExistsFromStore(store *repostorage.RepoStore, branch string) error {
 	return EnsureHeadRefExists(store.RepoPath(), InitOptions{Bare: false}, branch)
 }
-
