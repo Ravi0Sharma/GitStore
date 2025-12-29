@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"GitDb"
 )
@@ -25,6 +26,8 @@ func AddToIndex(root string, options InitOptions, path string) error {
 		return err
 	}
 	// Note: We defer Close() to ensure writes are persisted
+	// GitDb.Put() writes directly to file AND updates in-memory log
+	// Close() writes the in-memory log to file (which should be identical)
 	defer db.Close()
 
 	// Normalize path
@@ -168,10 +171,14 @@ func GetIndexEntries(root string, options InitOptions) (map[string]IndexEntry, e
 	entries := make(map[string]IndexEntry)
 
 	// Scan for all index/entries/* keys
+	// GitDb.Scan() iterates through the in-memory log, which is rebuilt from file on Open()
+	// Since GitDb.Put() writes directly to the log file, and Open() reads the file,
+	// we should see all writes from AddToIndex() even if it closed the DB
+	const indexEntriesPrefix = "index/entries/"
 	err = db.Scan(func(record GitDb.Record) error {
-		// Check if key starts with "index/entries/"
-		if len(record.Key) >= 15 && record.Key[:15] == "index/entries/" {
-			path := record.Key[15:] // Remove "index/entries/" prefix
+		// Check if key starts with "index/entries/" using strings.HasPrefix
+		if strings.HasPrefix(record.Key, indexEntriesPrefix) {
+			path := record.Key[len(indexEntriesPrefix):] // Remove "index/entries/" prefix
 
 			var entry IndexEntry
 			if err := json.Unmarshal(record.Value, &entry); err != nil {
@@ -179,9 +186,16 @@ func GetIndexEntries(root string, options InitOptions) (map[string]IndexEntry, e
 				return nil
 			}
 
-			// Only include entries with valid blobId (skip cleared entries)
+			// Since GitDb is append-only, Scan() iterates through all entries in order
+			// For the same key, later entries overwrite earlier ones in the map
+			// We only include entries with valid blobId (skip cleared entries with empty blobId)
+			// But we need to check: if we've already seen this path with a valid blobId,
+			// and now we see it with an empty blobId, we should remove it from the map
 			if entry.BlobID != "" {
 				entries[path] = entry
+			} else {
+				// Empty blobId means cleared - remove from map if it exists
+				delete(entries, path)
 			}
 		}
 		return nil
@@ -198,24 +212,39 @@ func ClearIndex(root string, options InitOptions) error {
 	}
 	defer db.Close()
 
-	// Get all index entries
-	entries, err := GetIndexEntries(root, options)
+	// Get all index entry keys (including those with empty blobId to find all keys)
+	// We need to scan for ALL keys with the prefix, not just valid entries
+	const indexEntriesPrefix = "index/entries/"
+	
+	// Scan for ALL keys with the prefix (including already-cleared entries)
+	// We need to find all keys, not just valid entries, to clear them all
+	allPaths := make(map[string]bool)
+	err = db.Scan(func(record GitDb.Record) error {
+		if strings.HasPrefix(record.Key, indexEntriesPrefix) {
+			path := record.Key[len(indexEntriesPrefix):]
+			allPaths[path] = true
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
-	// Delete all index entries
-	// Note: GitDb doesn't support Delete, so we could mark them as deleted
-	// For now, we'll just leave them - they'll be overwritten on next add
-	// In a production system, we'd want proper deletion
-
-	// Clear by writing empty entries or using a different approach
-	// Since GitDb is append-only, we can't truly delete, but we can mark as deleted
-	// For simplicity, we'll just clear the entries by writing empty values
-	for path := range entries {
+	// Clear by writing empty entries for all paths found
+	// Since GitDb is append-only, we can't truly delete, but we can mark entries as cleared
+	// by writing entries with empty blobId, which GetIndexEntries() will filter out
+	// GitDb's index will point to the latest (empty) entry for each key
+	for path := range allPaths {
 		entryKey := fmt.Sprintf("index/entries/%s", path)
 		// Write empty entry to effectively "delete" it
-		_ = db.Put(entryKey, []byte(`{"blobId":"","mode":""}`))
+		emptyEntry := IndexEntry{BlobID: "", Mode: ""}
+		emptyEntryData, err := json.Marshal(emptyEntry)
+		if err != nil {
+			return fmt.Errorf("failed to marshal empty entry: %w", err)
+		}
+		if err := db.Put(entryKey, emptyEntryData); err != nil {
+			return fmt.Errorf("failed to clear entry %s: %w", path, err)
+		}
 	}
 
 	return nil
