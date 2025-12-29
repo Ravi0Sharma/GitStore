@@ -113,13 +113,14 @@ func (s *Service) CreateCommit(repoID, message string) error {
 	}
 	defer repoStore.Close()
 
-	stagedFiles, err := repostorage.GetStagedFilesFromStore(repoStore)
+	// Check if there are staged entries
+	hasStaged, err := repostorage.HasStagedEntriesFromStore(repoStore)
 	if err != nil {
-		return fmt.Errorf("failed to check staged files: %w", err)
+		return fmt.Errorf("failed to check staged entries: %w", err)
 	}
 
-	if len(stagedFiles) == 0 {
-		return fmt.Errorf("nothing to commit. Stage changes first with 'git add <path>'")
+	if !hasStaged {
+		return fmt.Errorf("nothing to commit. Stage changes first with 'gitclone add'")
 	}
 
 	// Get current branch
@@ -165,7 +166,7 @@ func (s *Service) CreateCommit(repoID, message string) error {
 	}
 
 	// 3. Clear index
-	if err := repostorage.ClearIndexToBatch(batch); err != nil {
+	if err := repostorage.ClearIndexToBatch(batch, repoStore); err != nil {
 		return fmt.Errorf("failed to add index clear to batch: %w", err)
 	}
 

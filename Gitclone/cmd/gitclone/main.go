@@ -12,6 +12,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  gitclone init [--bare]          Initialize a new repository")
+	fmt.Println("  gitclone add <path>             Stage files for commit")
 	fmt.Println("  gitclone checkout <branch>      Switch branch (updates .gitclone/HEAD)")
 	fmt.Println("  gitclone commit -m <msg>        Create a commit")
 	fmt.Println("  gitclone merge <branch>         Merge branch into current branch")
@@ -31,6 +32,9 @@ func main() {
 	switch cmd {
 	case "init":
 		commands.Init(args)
+
+	case "add":
+		commands.Add(args)
 
 	case "checkout":
 		commands.Checkout(args)

@@ -3,8 +3,6 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -71,79 +69,78 @@ func ReadHeadRefMaybeFromStore(store *repostorage.RepoStore, branch string) (*in
 	return &commitID, nil
 }
 
-// GetStagedFilesFromStore returns staged files using RepoStore
+// GetStagedFilesFromStore returns staged file paths using RepoStore
 func GetStagedFilesFromStore(store *repostorage.RepoStore) ([]string, error) {
-	db := store.DB()
-	indexData, err := db.Get("index/staged")
+	entries, err := GetIndexEntriesFromStore(store)
 	if err != nil {
-		// No staged files
-		return []string{}, nil
+		return nil, err
 	}
 
-	var stagedFiles []string
-	if err := json.Unmarshal(indexData, &stagedFiles); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal index: %w", err)
+	paths := make([]string, 0, len(entries))
+	for path, entry := range entries {
+		if entry.BlobID != "" {
+			paths = append(paths, path)
+		}
 	}
 
-	return stagedFiles, nil
+	return paths, nil
+}
+
+// GetIndexEntriesFromStore returns all staged entries using RepoStore
+func GetIndexEntriesFromStore(store *repostorage.RepoStore) (map[string]IndexEntry, error) {
+	db := store.DB()
+	entries := make(map[string]IndexEntry)
+
+	// Scan for all index/entries/* keys
+	err := db.Scan(func(record GitDb.Record) error {
+		if len(record.Key) > 15 && record.Key[:15] == "index/entries/" {
+			path := record.Key[15:] // Remove "index/entries/" prefix
+
+			var entry IndexEntry
+			if err := json.Unmarshal(record.Value, &entry); err != nil {
+				return nil // Skip invalid entries
+			}
+
+			// Only include entries with valid blobId
+			if entry.BlobID != "" {
+				entries[path] = entry
+			}
+		}
+		return nil
+	})
+
+	return entries, err
 }
 
 // AddToIndexFromStore adds files to staging area using RepoStore
-func AddToIndexFromStore(store *repostorage.RepoStore, paths []string) error {
-	db := store.DB()
-	
-	// Read current index
-	indexData, err := db.Get("index/staged")
-	var stagedFiles []string
-	if err != nil {
-		// Index doesn't exist, create new
-		stagedFiles = []string{}
-	} else {
-		if err := json.Unmarshal(indexData, &stagedFiles); err != nil {
-			return fmt.Errorf("failed to unmarshal index: %w", err)
-		}
-	}
-
-	// Add new paths (deduplicate)
-	seen := make(map[string]bool)
-	for _, path := range stagedFiles {
-		seen[path] = true
-	}
-
+func AddToIndexFromStore(store *repostorage.RepoStore, path string) error {
 	repoPath := store.RepoPath()
-	for _, path := range paths {
-		// Normalize path
-		normalizedPath := filepath.Clean(path)
-		if !seen[normalizedPath] {
-			// Check if file exists
-			fullPath := filepath.Join(repoPath, normalizedPath)
-			if _, err := os.Stat(fullPath); err == nil {
-				stagedFiles = append(stagedFiles, normalizedPath)
-				seen[normalizedPath] = true
-			}
-		}
-	}
-
-	// Write index back
-	data, err := json.Marshal(stagedFiles)
-	if err != nil {
-		return fmt.Errorf("failed to marshal index: %w", err)
-	}
-
-	return db.Put("index/staged", data)
+	options := InitOptions{Bare: false}
+	return AddToIndex(repoPath, options, path)
 }
 
 // ClearIndexFromStore clears staging area using RepoStore
 func ClearIndexFromStore(store *repostorage.RepoStore) error {
-	db := store.DB()
-	
-	// Write empty array
-	data, err := json.Marshal([]string{})
+	repoPath := store.RepoPath()
+	options := InitOptions{Bare: false}
+	return ClearIndex(repoPath, options)
+}
+
+// HasStagedEntriesFromStore checks if there are staged entries using RepoStore
+func HasStagedEntriesFromStore(store *repostorage.RepoStore) (bool, error) {
+	entries, err := GetIndexEntriesFromStore(store)
 	if err != nil {
-		return fmt.Errorf("failed to marshal index: %w", err)
+		return false, err
 	}
 
-	return db.Put("index/staged", data)
+	// Check if any entries have valid blobId
+	for _, entry := range entries {
+		if entry.BlobID != "" {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // GetPushedCommitsFromStore returns pushed commits for a branch using RepoStore
@@ -273,12 +270,25 @@ func WriteHEADBranchToBatch(batch *repostorage.WriteBatch, branch string) error 
 }
 
 // ClearIndexToBatch clears the index in a batch
-func ClearIndexToBatch(batch *repostorage.WriteBatch) error {
-	data, err := json.Marshal([]string{})
+// Since we can't truly delete in GitDb, we mark all entries as empty
+func ClearIndexToBatch(batch *repostorage.WriteBatch, store *repostorage.RepoStore) error {
+	// Get all current entries
+	entries, err := GetIndexEntriesFromStore(store)
 	if err != nil {
-		return fmt.Errorf("failed to marshal index: %w", err)
+		return fmt.Errorf("failed to get index entries: %w", err)
 	}
-	batch.Put("index/staged", data)
+
+	// Mark all entries as cleared by writing empty entries
+	for path := range entries {
+		entryKey := fmt.Sprintf("index/entries/%s", path)
+		emptyEntry := IndexEntry{BlobID: "", Mode: ""}
+		entryData, err := json.Marshal(emptyEntry)
+		if err != nil {
+			return fmt.Errorf("failed to marshal empty entry: %w", err)
+		}
+		batch.Put(entryKey, entryData)
+	}
+
 	return nil
 }
 

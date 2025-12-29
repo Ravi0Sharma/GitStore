@@ -42,37 +42,13 @@ func (s *Service) StageFiles(repoID, path string) error {
 		return err
 	}
 
-	// Determine paths to stage
+	// Determine path to stage
 	if path == "" {
 		path = "."
 	}
 
-	var pathsToStage []string
-	if path == "." {
-		err := filepath.Walk(repoPath, func(filePath string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if info.IsDir() {
-				if info.Name() == ".gitclone" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			relPath, err := filepath.Rel(repoPath, filePath)
-			if err == nil {
-				pathsToStage = append(pathsToStage, relPath)
-			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("failed to scan files: %w", err)
-		}
-	} else {
-		pathsToStage = []string{path}
-	}
-
-	if err := repostorage.AddToIndexFromStore(repoStore, pathsToStage); err != nil {
+	// Add to index (handles both single files and directories)
+	if err := repostorage.AddToIndexFromStore(repoStore, path); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
