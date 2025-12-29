@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -132,8 +134,17 @@ type CheckoutRequest struct {
 	Branch string `json:"branch"`
 }
 
+type AddRequest struct {
+	Path string `json:"path"`
+}
+
 type CommitRequest struct {
 	Message string `json:"message"`
+}
+
+type PushRequest struct {
+	Remote string `json:"remote"`
+	Branch string `json:"branch"`
 }
 
 type MergeRequest struct {
@@ -265,8 +276,12 @@ func (s *Server) handleRepoRoutes(w http.ResponseWriter, r *http.Request) {
 		s.handleRepoCommits(w, r, repoID)
 	case "checkout":
 		s.handleRepoCheckout(w, r, repoID)
+	case "add":
+		s.handleRepoAdd(w, r, repoID)
 	case "commit":
 		s.handleRepoCommit(w, r, repoID)
+	case "push":
+		s.handleRepoPush(w, r, repoID)
 	case "merge":
 		s.handleRepoMerge(w, r, repoID)
 	case "files":
@@ -333,10 +348,25 @@ func (s *Server) handleRepoCommits(w http.ResponseWriter, r *http.Request, repoI
 		return
 	}
 
-	commits, err := s.loadCommits(repoPath)
+	// Get branch from query parameter (defaults to current branch if not specified)
+	branch := r.URL.Query().Get("branch")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 10 // default limit
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	commits, err := s.loadCommits(repoPath, branch)
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
+	}
+
+	// Apply limit
+	if limit > 0 && limit < len(commits) {
+		commits = commits[:limit]
 	}
 
 	respondJSON(w, http.StatusOK, commits)
@@ -438,6 +468,119 @@ func (s *Server) handleRepoCommit(w http.ResponseWriter, r *http.Request, repoID
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Commit created successfully"})
+}
+
+func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AddRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	repoPath := filepath.Join(s.repoBase, repoID)
+	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
+		return
+	}
+
+	// Change to repo directory temporarily
+	oldDir, err := os.Getwd()
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.Chdir(repoPath); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// Call git add command (for standard git repos)
+	path := req.Path
+	if path == "" {
+		path = "."
+	}
+
+	// Use standard git command
+	cmd := exec.Command("git", "add", path)
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("git add failed: %s", string(output))})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": fmt.Sprintf("Files staged: %s", path)})
+}
+
+func (s *Server) handleRepoPush(w http.ResponseWriter, r *http.Request, repoID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req PushRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	repoPath := filepath.Join(s.repoBase, repoID)
+	if !storage.InRepo(repoPath, storage.InitOptions{Bare: false}) {
+		respondJSON(w, http.StatusNotFound, ErrorResponse{Error: "Repository not found"})
+		return
+	}
+
+	// Change to repo directory temporarily
+	oldDir, err := os.Getwd()
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.Chdir(repoPath); err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// Call git push command (for standard git repos)
+	remote := req.Remote
+	if remote == "" {
+		remote = "origin"
+	}
+	branch := req.Branch
+	if branch == "" {
+		// Get current branch using git
+		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+		cmd.Dir = repoPath
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to get current branch"})
+			return
+		}
+		branch = strings.TrimSpace(string(output))
+		if branch == "" {
+			branch = "main"
+		}
+	}
+
+	// Use standard git command
+	cmd := exec.Command("git", "push", remote, branch)
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("git push failed: %s", string(output))})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": fmt.Sprintf("Pushed to %s/%s successfully", remote, branch)})
 }
 
 func (s *Server) handleRepoMerge(w http.ResponseWriter, r *http.Request, repoID string) {
@@ -758,8 +901,18 @@ func (s *Server) loadBranches(repoPath string) ([]Branch, error) {
 		return nil, err
 	}
 
-	branches := make([]Branch, 0, len(branchNames))
+	// Deduplicate branches by name (use map to track seen branches)
+	seen := make(map[string]bool)
+	uniqueNames := make([]string, 0, len(branchNames))
 	for _, name := range branchNames {
+		if !seen[name] {
+			seen[name] = true
+			uniqueNames = append(uniqueNames, name)
+		}
+	}
+
+	branches := make([]Branch, 0, len(uniqueNames))
+	for _, name := range uniqueNames {
 		branches = append(branches, Branch{
 			Name:      name,
 			CreatedAt: time.Now().Format(time.RFC3339), // TODO: get actual creation time
@@ -769,14 +922,22 @@ func (s *Server) loadBranches(repoPath string) ([]Branch, error) {
 	return branches, nil
 }
 
-func (s *Server) loadCommits(repoPath string) ([]Commit, error) {
+func (s *Server) loadCommits(repoPath string, branchName ...string) ([]Commit, error) {
 	opts := storage.InitOptions{Bare: false}
-	currentBranch, err := storage.ReadHEADBranch(repoPath, opts)
-	if err != nil {
-		return []Commit{}, nil
+
+	// Use provided branch name, or default to current branch
+	var targetBranch string
+	if len(branchName) > 0 && branchName[0] != "" {
+		targetBranch = branchName[0]
+	} else {
+		var err error
+		targetBranch, err = storage.ReadHEADBranch(repoPath, opts)
+		if err != nil {
+			return []Commit{}, nil
+		}
 	}
 
-	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, currentBranch)
+	tipPtr, err := storage.ReadHeadRefMaybe(repoPath, opts, targetBranch)
 	if err != nil || tipPtr == nil {
 		return []Commit{}, nil
 	}

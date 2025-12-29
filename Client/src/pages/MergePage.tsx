@@ -225,8 +225,8 @@ const MergePage = () => {
             <h2 className="font-semibold text-foreground">Available Branches</h2>
           </div>
           <div className="divide-y divide-border">
-            {repo.branches.map((branch) => (
-              <div key={branch.name} className="p-4 flex items-center gap-3">
+            {repo.branches.map((branch, index) => (
+              <div key={`${repoId}-${branch.name}-${index}`} className="p-4 flex items-center gap-3">
                 <GitBranch className={`h-4 w-4 ${branch.name === repo.currentBranch ? 'text-success' : 'text-muted-foreground'}`} />
                 <span className="font-mono text-sm text-foreground">{branch.name}</span>
                 {branch.name === repo.currentBranch && (

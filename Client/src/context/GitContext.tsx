@@ -126,12 +126,19 @@ export function GitProvider({ children }: GitProviderProps) {
       const reposWithData = await Promise.all(
         repos.map(async (repo) => {
           try {
-            // Load branches
+            // Load branches and deduplicate by name
             const branches = await api.getBranches(repo.id);
-            const branchDates = branches.map(b => ({
-              name: b.name,
-              createdAt: new Date(b.createdAt),
-            }));
+            // Deduplicate branches by name (use Map to ensure uniqueness)
+            const branchMap = new Map<string, { name: string; createdAt: Date }>();
+            branches.forEach(b => {
+              if (!branchMap.has(b.name)) {
+                branchMap.set(b.name, {
+                  name: b.name,
+                  createdAt: new Date(b.createdAt),
+                });
+              }
+            });
+            const branchDates = Array.from(branchMap.values());
             
             // Load issues
             const issues = await api.getIssues(repo.id);
@@ -223,12 +230,19 @@ export function GitProvider({ children }: GitProviderProps) {
       try {
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Load branches
+        // Load branches and deduplicate by name
         const branches = await api.getBranches(created.id);
-        const branchDates = branches.map(b => ({
-          name: b.name,
-          createdAt: new Date(b.createdAt),
-        }));
+        // Deduplicate branches by name
+        const branchMap = new Map<string, { name: string; createdAt: Date }>();
+        branches.forEach(b => {
+          if (!branchMap.has(b.name)) {
+            branchMap.set(b.name, {
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            });
+          }
+        });
+        const branchDates = Array.from(branchMap.values());
         
         // Load issues
         const issues = await api.getIssues(created.id);
@@ -388,17 +402,24 @@ export function GitProvider({ children }: GitProviderProps) {
       // Reload branches from API (same pattern as issues)
       try {
         const branches = await api.getBranches(repoId);
-        const branchDates = branches.map(b => ({
-          name: b.name,
-          createdAt: new Date(b.createdAt),
-        }));
+        // Deduplicate branches by name
+        const branchMap = new Map<string, { name: string; createdAt: Date }>();
+        branches.forEach(b => {
+          if (!branchMap.has(b.name)) {
+            branchMap.set(b.name, {
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            });
+          }
+        });
+        const branchDates = Array.from(branchMap.values());
         
-        // Update repo with new branches (ensuring we have all branches including default)
+        // Update repo with new branches (REPLACE, not append)
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
             return {
               ...repo,
-              branches: branchDates, // Use fetched branches (includes default branch)
+              branches: branchDates, // REPLACE with fetched branches
             };
           }
           return repo;
@@ -504,17 +525,24 @@ export function GitProvider({ children }: GitProviderProps) {
       // Reload branches and repos after successful merge (branches might have changed)
       try {
         const branches = await api.getBranches(repoId);
-        const branchDates = branches.map(b => ({
-          name: b.name,
-          createdAt: new Date(b.createdAt),
-        }));
+        // Deduplicate branches by name
+        const branchMap = new Map<string, { name: string; createdAt: Date }>();
+        branches.forEach(b => {
+          if (!branchMap.has(b.name)) {
+            branchMap.set(b.name, {
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            });
+          }
+        });
+        const branchDates = Array.from(branchMap.values());
         
-        // Update repo with refreshed branches
+        // Update repo with refreshed branches (REPLACE, not append)
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
             return {
               ...repo,
-              branches: branchDates,
+              branches: branchDates, // REPLACE with fetched branches
               currentBranch: toBranch, // Update current branch after checkout
             };
           }
