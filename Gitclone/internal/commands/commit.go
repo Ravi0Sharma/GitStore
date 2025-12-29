@@ -37,7 +37,7 @@ func Commit(args []string) {
 		return
 	}
 	if !hasStaged {
-		fmt.Println("Nothing to commit. Stage changes first with 'gitclone add'")
+		fmt.Println("Nothing to commit. Stage changes first with 'git add <path>' or 'gitclone add <path>'")
 		return
 	}
 

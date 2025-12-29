@@ -187,11 +187,12 @@ export const api = {
     await this.checkout(repoId, branchName);
   },
 
-  async add(repoId: string, path: string): Promise<void> {
-    await fetchJSON(`/api/repos/${repoId}/add`, {
+  async add(repoId: string, path: string): Promise<{ stagedCount: number; stagedPaths: string[] }> {
+    const response = await fetchJSON<{ stagedCount: number; stagedPaths: string[] }>(`/api/repos/${repoId}/add`, {
       method: 'POST',
       body: JSON.stringify({ path }),
     });
+    return response || { stagedCount: 0, stagedPaths: [] };
   },
 
   async commit(repoId: string, message: string): Promise<void> {

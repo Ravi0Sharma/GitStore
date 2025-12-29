@@ -32,7 +32,7 @@ func BuildTreeFromIndex(root string, options InitOptions, treeID int) error {
 	}
 
 	if len(entries) == 0 {
-		return fmt.Errorf("nothing to commit. Stage changes first with 'gitclone add'")
+		return fmt.Errorf("Nothing to commit. Stage changes first with 'git add <path>' or 'gitclone add <path>'")
 	}
 
 	// Build tree entries from index
