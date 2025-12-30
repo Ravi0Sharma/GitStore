@@ -1,6 +1,8 @@
 ## GitStore
 
-GitStore is a Git-inspired system built as a learning and architecture project: a Go backend and “gitclone” engine backed by a custom append-only KV store, a polished React (Vite) UI and a Node.js CLI. The goal is to explore repository modeling (refs, commits, merges), durability trade-offs 
+GitStore is a Git-inspired project built to explore repository modeling and backend architecture.
+It consists of a Go backend with a custom append-only key–value store, a React (Vite) frontend,
+and a Node.js CLI.
 
 ### High-level Overview
 
