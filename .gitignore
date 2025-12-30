@@ -25,3 +25,17 @@ db/
 tmp/
 temp/
 
+# runtime data
+gitClone/data/
+data/
+*.log
+**/.gitclone/db/
+**/.gitclone/db/log
+
+# secrets / local env
+.env
+.env.*
+*.pem
+*.key
+serviceAccount*.json
+

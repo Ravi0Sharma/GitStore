@@ -36,7 +36,7 @@ type Repository struct {
 	CurrentBranch string        `json:"currentBranch"`
 	Branches      []Branch      `json:"branches"`
 	Commits       []Commit      `json:"commits"`
-	Issues        []interface{} `json:"issues"` // Issues not implemented yet
+	Issues        []interface{} `json:"issues"`
 }
 
 type CheckoutRequest struct {
@@ -100,4 +100,3 @@ type FileRequest struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
 }
-

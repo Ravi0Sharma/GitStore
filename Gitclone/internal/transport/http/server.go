@@ -16,11 +16,11 @@ import (
 
 // Server holds the server dependencies
 type Server struct {
-	repoBase   string
-	metaStore  *metadata.Store
-	branchSvc  *branches.Service
-	commitSvc  *commits.Service
-	fileSvc    *files.Service
+	repoBase  string
+	metaStore *metadata.Store
+	branchSvc *branches.Service
+	commitSvc *commits.Service
+	fileSvc   *files.Service
 }
 
 // NewServer creates a new server instance
@@ -120,7 +120,6 @@ func (s *Server) LoadRepo(repoPath, repoID string) (Repository, error) {
 	}, nil
 }
 
-
 // LoadIssues loads all issues for a repository
 func (s *Server) LoadIssues(repoID string) ([]Issue, error) {
 	// Use metadata store's db directly
@@ -146,7 +145,7 @@ func (s *Server) LoadIssues(repoID string) ([]Issue, error) {
 
 // SaveIssue saves an issue to a repository
 func (s *Server) SaveIssue(repoID string, issue Issue) error {
-		// Load existing issues
+	// Load existing issues
 	issues, err := s.LoadIssues(repoID)
 	if err != nil {
 		return err
@@ -173,7 +172,6 @@ func (s *Server) SaveIssue(repoID string, issue Issue) error {
 
 	return nil
 }
-
 
 // IsAncestorFromStore checks if commitA is an ancestor of commitB using RepoStore
 func (s *Server) IsAncestorFromStore(repoStore *storage.RepoStore, commitA, commitB int) bool {
@@ -226,4 +224,3 @@ func RespondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
-

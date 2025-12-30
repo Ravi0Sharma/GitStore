@@ -21,7 +21,7 @@ func (s *Server) handleRepoCommits(w http.ResponseWriter, r *http.Request, repoI
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoCommits - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoCommits: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -75,7 +75,7 @@ func (s *Server) handleRepoCommit(w http.ResponseWriter, r *http.Request, repoID
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoCommit - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoCommit: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -118,7 +118,7 @@ func (s *Server) handleRepoPush(w http.ResponseWriter, r *http.Request, repoID s
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoPush - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoPush: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
