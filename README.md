@@ -21,8 +21,8 @@ The web client is designed with a clear layout and predictable navigation, with 
 
 Clean landing experience with onboarding-oriented sections and a consistent design system.
 
-![Landing Page](docs/images/landingPage-1.png)
-![Landing Page](docs/images/landingPage-2.png)
+![Landing Page](assets/images/landingPage-1.png)
+![Landing Page](assets/images/landingPage-2.png)
 
 ### Authentication (Firebase)
 
@@ -36,7 +36,7 @@ The client uses **Firebase Authentication**
 The dashboard serves as the main workspace, listing repositories and providing navigation to repository features such as branches, commits, merges and issues.
 
 
-![Dashboard](docs/images/dashboard.png)
+![Dashboard](assets/images/dashboard.png)
 
 ### Repository Features
 
@@ -52,13 +52,13 @@ GitStore models a “local vs pushed” distinction:
 - **Commits are created locally** branch refs move.
 - **Commits become visible in the UI after push**, because commit listing reads from `refs/remotes/origin/<branch>` (the “pushed view”).
 
-![RepoPage](docs/images/repoView.png)
+![RepoPage](assets/images/repoView.png)
 
 #### Issues
 
 Basic issue tracking per repository (creation, listing and status updates).
 
-![Issues](docs/images/issues.png)
+![Issues](assets/images/issues.png)
 
 ### CLI Tool
 
@@ -70,9 +70,9 @@ The Node-based CLI (`cli/`) is built to support:
 
 #### CLI Commands
 
-![CLI help](docs/images/cli-help.png)
+![CLI help](assets/images/cli-help.png)
 
-![CLI push](docs/images/cli-push.png)
+![CLI push](assets/images/cli-push.png)
 
 ### Storage Engine
 
