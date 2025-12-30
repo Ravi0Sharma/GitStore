@@ -58,7 +58,7 @@ GitStore models a “local vs pushed” distinction:
 
 Basic issue tracking per repository (creation, listing and status updates).
 
-![Issues](assets/images/issues.png)
+![Issues](assets/images/Issues.png)
 
 ### CLI Tool
 
