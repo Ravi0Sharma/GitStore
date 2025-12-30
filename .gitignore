@@ -15,7 +15,7 @@ bin/
 
 # Go workspace file
 go.work
-
+.vite/deps
 # Database log files
 *.log
 db/
