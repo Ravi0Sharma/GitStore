@@ -85,6 +85,29 @@ The backend uses a custom append-only key–value storage engine written in Go.
 
 REST API (`/api/repos/*`) for repository operations: create, branches, commits, merge, files and issues.
 
+### Docker
+
+Run the full system using Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+**Backend API:** http://localhost:8080
+
+**Frontend UI:** http://localhost
+
+Data is persisted using Docker volumes:
+
+- **Repositories:** `/data/repos`
+- **Metadata DB:** `/data/db`
+
+To reset all data:
+
+```bash
+docker compose down -v
+```
+
 ### Disclaimer
 
 This repository is built for **learning and exploration**.

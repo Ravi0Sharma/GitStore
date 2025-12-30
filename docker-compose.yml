@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: gitClone/Dockerfile
+    container_name: gitstore-server
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - GITSTORE_REPO_BASE=/data/repos
+      - GITSTORE_DB_PATH=/data/db
+    volumes:
+      - gitstore-repos:/data/repos
+      - gitstore-db:/data/db
+    networks:
+      - gitstore-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/repos"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  client:
+    build:
+      context: ./Client
+      dockerfile: Dockerfile
+      # Build args: API URL (empty = use relative paths + nginx proxy)
+      # Firebase config must be provided via .env file or environment
+      args:
+        - VITE_API_URL=
+        - VITE_FIREBASE_APIKEY=${VITE_FIREBASE_APIKEY}
+        - VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
+        - VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
+        - VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET}
+        - VITE_FIREBASE_MESSAGE_SENDER_ID=${VITE_FIREBASE_MESSAGE_SENDER_ID}
+        - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
+        - VITE_FIREBASE_MEASUREMENT_ID=${VITE_FIREBASE_MEASUREMENT_ID}
+    container_name: gitstore-client
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    networks:
+      - gitstore-network
+    restart: unless-stopped
+
+volumes:
+  gitstore-repos:
+    driver: local
+  gitstore-db:
+    driver: local
+
+networks:
+  gitstore-network:
+    driver: bridge
+

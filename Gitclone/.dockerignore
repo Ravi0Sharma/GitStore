@@ -1,0 +1,24 @@
+# Build artifacts
+gitserver
+gitclone
+*.exe
+*.test
+
+# Runtime data
+data/
+*.log
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
