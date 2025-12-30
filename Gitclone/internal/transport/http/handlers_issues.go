@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -13,13 +12,10 @@ import (
 
 // handleRepoIssues handles GET/POST /api/repos/:id/issues
 func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID string) {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
-	if err != nil {
-		log.Printf("DEBUG: handleRepoIssues - repoID=%s, error=%v", repoID, err)
+	if _, err := repos.ResolveRepoPath(s.repoBase, repoID); err != nil {
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
-	log.Printf("DEBUG: handleRepoIssues - repoID=%s, resolvedPath=%s", repoID, repoPath)
 
 	if r.Method == http.MethodGet {
 		issues, err := s.LoadIssues(repoID)
@@ -72,13 +68,10 @@ func (s *Server) handleRepoIssues(w http.ResponseWriter, r *http.Request, repoID
 
 // handleIssue handles GET/PATCH /api/repos/:id/issues/:issueId
 func (s *Server) handleIssue(w http.ResponseWriter, r *http.Request, repoID, issueID string) {
-	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
-	if err != nil {
-		log.Printf("DEBUG: handleIssue - repoID=%s, error=%v", repoID, err)
+	if _, err := repos.ResolveRepoPath(s.repoBase, repoID); err != nil {
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
-	log.Printf("DEBUG: handleIssue - repoID=%s, resolvedPath=%s", repoID, repoPath)
 
 	if r.Method == http.MethodGet {
 		issues, err := s.LoadIssues(repoID)

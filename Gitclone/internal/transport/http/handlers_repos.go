@@ -64,11 +64,10 @@ func (s *Server) handleListRepos(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetRepo(w http.ResponseWriter, r *http.Request, repoID string) {
 	repoPath, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleGetRepo - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleGetRepo: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
-	log.Printf("DEBUG: handleGetRepo - repoID=%s, resolvedPath=%s", repoID, repoPath)
 
 	repo, err := s.LoadRepo(repoPath, repoID)
 	if err != nil {

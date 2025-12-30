@@ -26,7 +26,7 @@ func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID st
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoAdd - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoAdd: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -36,7 +36,7 @@ func (s *Server) handleRepoAdd(w http.ResponseWriter, r *http.Request, repoID st
 	if path == "" {
 		path = "."
 	}
-	
+
 	// Stage files and get staged entries info
 	stagedCount, stagedPaths, err := s.fileSvc.StageFilesWithInfo(repoID, path)
 	if err != nil {
@@ -75,7 +75,7 @@ func (s *Server) handleRepoFiles(w http.ResponseWriter, r *http.Request, repoID 
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoFiles - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoFiles: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
