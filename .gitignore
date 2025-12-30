@@ -25,3 +25,10 @@ db/
 tmp/
 temp/
 
+# runtime data
+gitClone/data/
+data/
+*.log
+**/.gitclone/db/
+**/.gitclone/db/log
+
