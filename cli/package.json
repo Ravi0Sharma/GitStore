@@ -1,0 +1,29 @@
+{
+  "name": "gitstore-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for GitStore - file operations and git commands",
+  "type": "module",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "gitstore": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "cli": "node dist/cli/index.js",
+    "start": "npm run build && npm run cli"
+  },
+  "keywords": ["git", "cli", "gitstore"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "inquirer": "^12.4.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -68,16 +68,22 @@ const MergePage = () => {
       setIsMerging(true);
       setMergeResult(null); // Clear previous result
       try {
+        console.log(`[MergePage] Starting merge: ${fromBranch} -> ${toBranch}`);
         const result = await mergeBranches(repo.id, fromBranch, toBranch);
         setMergeResult(result);
         
         // If merge was successful, refresh the repo data to show updated branches/commits
         if (result.success) {
-          // The mergeBranches function already calls loadRepositories, but we can also
-          // explicitly refresh the current repo view
+          console.log(`[MergePage] Merge successful, refreshing repo data`);
+          // The mergeBranches function already calls loadRepositories and pushes,
+          // but we explicitly refresh to ensure UI updates
           await loadRepositories();
+          
+          // Note: Commits will be refreshed when user navigates back to RepoPage
+          // because RepoPage's useEffect depends on repo?.currentBranch
         }
       } catch (err) {
+        console.error(`[MergePage] Merge error:`, err);
         // This should not happen as mergeBranches catches errors, but just in case
         setMergeResult({
           success: false,
@@ -130,12 +136,6 @@ const MergePage = () => {
               <p className={`text-sm mt-1 ${mergeResult.success ? 'text-success/80' : 'text-destructive/80'}`}>
                 {mergeResult.message}
               </p>
-              {mergeResult.success && mergeResult.type === 'fast-forward' && (
-                <div className="mt-3 p-3 bg-card rounded-md border border-border">
-                  <p className="text-xs text-muted-foreground">Merge type</p>
-                  <p className="font-mono text-sm text-foreground mt-1">Fast-forward merge completed</p>
-                </div>
-              )}
               {!mergeResult.success && (
                 <div className="mt-3 p-3 bg-card rounded-md border border-border">
                   <p className="text-xs text-muted-foreground">Note</p>
@@ -225,8 +225,8 @@ const MergePage = () => {
             <h2 className="font-semibold text-foreground">Available Branches</h2>
           </div>
           <div className="divide-y divide-border">
-            {repo.branches.map((branch) => (
-              <div key={branch.name} className="p-4 flex items-center gap-3">
+            {repo.branches.map((branch, index) => (
+              <div key={`${repoId}-${branch.name}-${index}`} className="p-4 flex items-center gap-3">
                 <GitBranch className={`h-4 w-4 ${branch.name === repo.currentBranch ? 'text-success' : 'text-muted-foreground'}`} />
                 <span className="font-mono text-sm text-foreground">{branch.name}</span>
                 {branch.name === repo.currentBranch && (

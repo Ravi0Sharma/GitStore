@@ -1,0 +1,1 @@
+{"version":3,"file":"repo-validator.d.ts","sourceRoot":"","sources":["../../src/utils/repo-validator.ts"],"names":[],"mappings":"AAGA;;;GAGG;AACH,wBAAgB,eAAe,CAAC,QAAQ,EAAE,MAAM,GAAG;IAAE,KAAK,EAAE,OAAO,CAAC;IAAC,KAAK,CAAC,EAAE,MAAM,CAAA;CAAE,CA+BpF;AAED;;GAEG;AACH,wBAAgB,WAAW,CAAC,QAAQ,EAAE,MAAM,GAAG,MAAM,CAIpD"}

@@ -162,8 +162,17 @@ export const api = {
     return fetchJSON<Branch[]>(`/api/repos/${repoId}/branches`);
   },
 
-  async getCommits(repoId: string): Promise<Commit[]> {
-    return fetchJSON<Commit[]>(`/api/repos/${repoId}/commits`);
+  async getCommits(repoId: string, branch?: string, limit?: number): Promise<Commit[]> {
+    const params = new URLSearchParams();
+    if (branch) {
+      params.append('branch', branch);
+    }
+    if (limit) {
+      params.append('limit', limit.toString());
+    }
+    const queryString = params.toString();
+    const url = `/api/repos/${repoId}/commits${queryString ? `?${queryString}` : ''}`;
+    return fetchJSON<Commit[]>(url);
   },
 
   async checkout(repoId: string, branch: string): Promise<void> {
@@ -178,10 +187,25 @@ export const api = {
     await this.checkout(repoId, branchName);
   },
 
+  async add(repoId: string, path: string): Promise<{ stagedCount: number; stagedPaths: string[] }> {
+    const response = await fetchJSON<{ stagedCount: number; stagedPaths: string[] }>(`/api/repos/${repoId}/add`, {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+    return response || { stagedCount: 0, stagedPaths: [] };
+  },
+
   async commit(repoId: string, message: string): Promise<void> {
     await fetchJSON(`/api/repos/${repoId}/commit`, {
       method: 'POST',
       body: JSON.stringify({ message }),
+    });
+  },
+
+  async push(repoId: string, remote: string, branch: string): Promise<void> {
+    await fetchJSON(`/api/repos/${repoId}/push`, {
+      method: 'POST',
+      body: JSON.stringify({ remote, branch }),
     });
   },
 
@@ -207,6 +231,13 @@ export const api = {
     return fetchJSON<any>(`/api/repos/${repoId}/issues/${issueId}`, {
       method: 'PATCH',
       body: JSON.stringify({}),
+    });
+  },
+
+  async createOrEditFile(repoId: string, path: string, content: string): Promise<{ message: string; path: string }> {
+    return fetchJSON<{ message: string; path: string }>(`/api/repos/${repoId}/files`, {
+      method: 'POST',
+      body: JSON.stringify({ path, content }),
     });
   },
 };

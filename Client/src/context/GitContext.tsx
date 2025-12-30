@@ -126,12 +126,19 @@ export function GitProvider({ children }: GitProviderProps) {
       const reposWithData = await Promise.all(
         repos.map(async (repo) => {
           try {
-            // Load branches
+            // Load branches and deduplicate by name
             const branches = await api.getBranches(repo.id);
-            const branchDates = branches.map(b => ({
-              name: b.name,
-              createdAt: new Date(b.createdAt),
-            }));
+            // Deduplicate branches by name (use Map to ensure uniqueness)
+            const branchMap = new Map<string, { name: string; createdAt: Date }>();
+            branches.forEach(b => {
+              if (!branchMap.has(b.name)) {
+                branchMap.set(b.name, {
+                  name: b.name,
+                  createdAt: new Date(b.createdAt),
+                });
+              }
+            });
+            const branchDates = Array.from(branchMap.values());
             
             // Load issues
             const issues = await api.getIssues(repo.id);
@@ -223,12 +230,19 @@ export function GitProvider({ children }: GitProviderProps) {
       try {
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Load branches
+        // Load branches and deduplicate by name
         const branches = await api.getBranches(created.id);
-        const branchDates = branches.map(b => ({
-          name: b.name,
-          createdAt: new Date(b.createdAt),
-        }));
+        // Deduplicate branches by name
+        const branchMap = new Map<string, { name: string; createdAt: Date }>();
+        branches.forEach(b => {
+          if (!branchMap.has(b.name)) {
+            branchMap.set(b.name, {
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            });
+          }
+        });
+        const branchDates = Array.from(branchMap.values());
         
         // Load issues
         const issues = await api.getIssues(created.id);
@@ -380,49 +394,69 @@ export function GitProvider({ children }: GitProviderProps) {
     try {
       console.log('GitContext: Creating branch', repoId, branchName);
       
-      // Call API to create branch
-      await api.createBranch(repoId, branchName);
+      // Call API to create branch (checkout creates the branch)
+      await api.checkout(repoId, branchName);
       setApiStatus('connected');
       setApiError(null);
       
-      // Reload branches from API (same pattern as issues)
+      // Await checkout completion, then refresh branches ONCE
+      // Use a request ID to prevent race conditions from concurrent calls
+      const requestId = Date.now();
+      console.log(`[GitContext] createBranch requestId=${requestId}, awaiting checkout completion`);
+      
+      // Small delay to ensure server has flushed writes
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Fetch branches ONCE and REPLACE state (do not append)
       try {
         const branches = await api.getBranches(repoId);
-        const branchDates = branches.map(b => ({
-          name: b.name,
-          createdAt: new Date(b.createdAt),
-        }));
+        console.log(`[GitContext] createBranch requestId=${requestId}, fetched ${branches.length} branches:`, branches.map(b => b.name));
         
-        // Update repo with new branches (ensuring we have all branches including default)
+        // Deduplicate branches by name
+        const branchMap = new Map<string, { name: string; createdAt: Date }>();
+        branches.forEach(b => {
+          if (!branchMap.has(b.name)) {
+            branchMap.set(b.name, {
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            });
+          }
+        });
+        const branchDates = Array.from(branchMap.values());
+        
+        // REPLACE branches state (not append) - this prevents stale data from overwriting
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
+            console.log(`[GitContext] createBranch requestId=${requestId}, replacing branches for repo ${repoId}:`, branchDates.map(b => b.name));
             return {
               ...repo,
-              branches: branchDates, // Use fetched branches (includes default branch)
+              branches: branchDates, // REPLACE with fetched branches
+              currentBranch: branchName, // Also update current branch
             };
           }
           return repo;
         }));
       } catch (reloadErr) {
-        console.warn('GitContext: Failed to reload branches after create, using optimistic update:', reloadErr);
+        console.warn(`[GitContext] createBranch requestId=${requestId}, failed to reload branches:`, reloadErr);
         // Optimistic update as fallback
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
             // Check if branch already exists
             if (repo.branches.some(b => b.name === branchName)) {
-              return repo;
+              return { ...repo, currentBranch: branchName };
             }
             // Add new branch to existing branches
             return {
               ...repo,
               branches: [...repo.branches, { name: branchName, createdAt: new Date() }],
+              currentBranch: branchName,
             };
           }
           return repo;
         }));
       }
       
-      console.log('GitContext: Branch creation completed');
+      console.log(`[GitContext] createBranch requestId=${requestId}, branch creation completed`);
     } catch (err) {
       console.error('Failed to create branch:', err);
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -469,21 +503,45 @@ export function GitProvider({ children }: GitProviderProps) {
       
       // Only reload if API worked
       if (apiWorked) {
-        // Wait a bit for server to be ready
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Use request ID to prevent race conditions
+        const requestId = Date.now();
+        console.log(`[GitContext] switchBranch requestId=${requestId}, awaiting checkout completion`);
+        
+        // Small delay to ensure server has flushed writes
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         try {
-          // Then reload to get accurate data (with guard)
-          const repoList = await api.listRepos();
-          console.log('GitContext: After switchBranch, listRepos returned', repoList.length, 'repos');
+          // Fetch branches ONCE and REPLACE state (do not call loadRepositories which might overwrite)
+          const branches = await api.getBranches(repoId);
+          console.log(`[GitContext] switchBranch requestId=${requestId}, fetched ${branches.length} branches:`, branches.map(b => b.name));
           
-          if (repoList.length > 0) {
-            await loadRepositories(true); // skipEmptyGuard = true
-          } else {
-            console.warn('GitContext: listRepos returned empty after switchBranch, keeping optimistic state');
-          }
+          // Deduplicate branches by name
+          const branchMap = new Map<string, { name: string; createdAt: Date }>();
+          branches.forEach(b => {
+            if (!branchMap.has(b.name)) {
+              branchMap.set(b.name, {
+                name: b.name,
+                createdAt: new Date(b.createdAt),
+              });
+            }
+          });
+          const branchDates = Array.from(branchMap.values());
+          
+          // REPLACE branches state (not append) - this prevents stale data from overwriting
+          setRepositories(prev => prev.map(repo => {
+            if (repo.id === repoId) {
+              console.log(`[GitContext] switchBranch requestId=${requestId}, replacing branches for repo ${repoId}:`, branchDates.map(b => b.name));
+              return {
+                ...repo,
+                branches: branchDates, // REPLACE with fetched branches
+                currentBranch: branchName, // Update current branch
+              };
+            }
+            return repo;
+          }));
         } catch (reloadErr) {
-          console.warn('GitContext: Failed to reload after switchBranch, keeping optimistic state');
+          console.warn(`[GitContext] switchBranch requestId=${requestId}, failed to reload branches:`, reloadErr);
+          // Keep optimistic state - currentBranch is already updated
         }
       }
       console.log('GitContext: Branch switch completed');
@@ -495,33 +553,64 @@ export function GitProvider({ children }: GitProviderProps) {
   };
 
   const mergeBranches = async (repoId: string, fromBranch: string, toBranch: string): Promise<MergeResult> => {
+    const requestId = Date.now();
     try {
+      console.log(`[GitContext] mergeBranches requestId=${requestId}: merging ${fromBranch} into ${toBranch} for repo ${repoId}`);
+      
       // First checkout to target branch
       await api.checkout(repoId, toBranch);
+      console.log(`[GitContext] mergeBranches requestId=${requestId}: checked out ${toBranch}`);
+      
       // Then merge fromBranch into toBranch
       const mergeResponse = await api.merge(repoId, fromBranch);
+      console.log(`[GitContext] mergeBranches requestId=${requestId}: merge completed, response:`, mergeResponse);
+      
+      // IMPORTANT: After merge, we need to push to update remote refs
+      // ListCommits reads from refs/remotes/origin/<branch>, so we must push
+      // to make the merge commit visible in the UI
+      try {
+        await api.push(repoId, 'origin', toBranch);
+        console.log(`[GitContext] mergeBranches requestId=${requestId}: pushed ${toBranch} after merge`);
+      } catch (pushErr) {
+        console.warn(`[GitContext] mergeBranches requestId=${requestId}: failed to push after merge:`, pushErr);
+        // Continue - merge succeeded even if push failed
+      }
       
       // Reload branches and repos after successful merge (branches might have changed)
       try {
         const branches = await api.getBranches(repoId);
-        const branchDates = branches.map(b => ({
-          name: b.name,
-          createdAt: new Date(b.createdAt),
-        }));
+        console.log(`[GitContext] mergeBranches requestId=${requestId}: fetched ${branches.length} branches after merge`);
         
-        // Update repo with refreshed branches
+        // Deduplicate branches by name
+        const branchMap = new Map<string, { name: string; createdAt: Date }>();
+        branches.forEach(b => {
+          if (!branchMap.has(b.name)) {
+            branchMap.set(b.name, {
+              name: b.name,
+              createdAt: new Date(b.createdAt),
+            });
+          }
+        });
+        const branchDates = Array.from(branchMap.values());
+        
+        // Update repo with refreshed branches (REPLACE, not append)
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
+            console.log(`[GitContext] mergeBranches requestId=${requestId}: updating repo state, currentBranch=${toBranch}`);
             return {
               ...repo,
-              branches: branchDates,
+              branches: branchDates, // REPLACE with fetched branches
               currentBranch: toBranch, // Update current branch after checkout
             };
           }
           return repo;
         }));
+        
+        // Force commits refresh by triggering a state update that RepoPage will detect
+        // The RepoPage useEffect depends on repo?.currentBranch, so updating currentBranch should trigger refresh
+        console.log(`[GitContext] mergeBranches requestId=${requestId}: repo state updated, RepoPage should refresh commits for ${toBranch}`);
       } catch (reloadErr) {
-        console.warn('GitContext: Failed to reload branches after merge, reloading all repos:', reloadErr);
+        console.warn(`[GitContext] mergeBranches requestId=${requestId}: Failed to reload branches after merge:`, reloadErr);
         await loadRepositories();
       }
       
@@ -534,6 +623,7 @@ export function GitProvider({ children }: GitProviderProps) {
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Merge failed';
+      console.error(`[GitContext] mergeBranches requestId=${requestId}: error:`, err);
       
       // Check if it's a non-fast-forward error (409 conflict)
       if (errorMessage.includes('Non-fast-forward') || errorMessage.includes('409')) {
