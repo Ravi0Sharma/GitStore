@@ -93,6 +93,6 @@ This repository is built for **learning and exploration**.
 
 - **No backend authentication/authorization** (Firebase auth is frontend-only)
 - **Concurrency risks** in backend flows
-- **No CI/CD ** currently in the repo
+- **No CI/CD** currently in the repo
 - **Storage engine lacks compaction** (append-only log grows over time)
 
