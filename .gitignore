@@ -7,6 +7,10 @@
 bin/
 *.txt
 
+# Dependencies
+node_modules/
+**/node_modules/
+
 # Test binary
 *.test
 

@@ -1,6 +1,7 @@
 ## GitStore
 
-GitStore is a Git-inspired system built as a learning and architecture project: a Go backend and “gitclone” engine backed by a custom append-only KV store, a polished React (Vite) UI and a Node.js CLI. The goal is to explore repository modeling (refs, commits, merges), durability trade-offs 
+GitStore is a Git-inspired project built to explore repository modeling and backend architecture.
+It consists of a Go backend with a custom append-only key–value store, a React (Vite) frontend and a Node.js CLI.
 
 ### High-level Overview
 
@@ -14,79 +15,75 @@ GitStore lets you:
 
 ### UI & User Experience
 
-The web client is intentionally designed to feel “product-grade” (layout, navigation, empty-states, and clear flows), even though the backend is learning-focused.
+The web client is designed with a clear layout and predictable navigation, with an emphasis on usability
 
 #### Landing Page
 
 Clean landing experience with onboarding-oriented sections and a consistent design system.
 
-![Landing Page](docs/images/landing-1.png)
-![Landing Page](docs/images/landing-2.png)
+![Landing Page](assets/images/landingPage-1.png)
+![Landing Page](assets/images/landingPage-2.png)
 
 ### Authentication (Firebase)
 
-The client uses **Firebase Authentication** for a smooth UX and identity display.
+The client uses **Firebase Authentication** 
 
 - **Email & password** 
 - **Google sign-in** 
 
-- Auth is **frontend-only**: the backend does not validate Firebase ID tokens.
-
 ### Dashboard
 
-The dashboard is the primary workspace: it lists repositories and provides navigation into repo features (branches, commits/merge, issues, CLI-like interactions).
+The dashboard serves as the main workspace, listing repositories and providing navigation to repository features such as branches, commits, merges and issues.
 
-![Dashboard](docs/images/dashboard.png)
+
+![Dashboard](assets/images/dashboard.png)
 
 ### Repository Features
 
 #### Create Repository
 
-Create repositories directly from the UI; repositories persist on the server via a metadata registry.
+Repositories can be created directly from the UI and are persisted on the server via a metadata registry.
 
-#### Commits & Merge
+
+#### Commits & Push
 
 GitStore models a “local vs pushed” distinction:
 
 - **Commits are created locally** branch refs move.
 - **Commits become visible in the UI after push**, because commit listing reads from `refs/remotes/origin/<branch>` (the “pushed view”).
-- Merge flow supports fast-forward-style constraints; the UI typically pushes after merge so history becomes visible.
 
-![Commits / Merge](docs/images/commits-merge.png)
+![RepoPage](assets/images/repoView.png)
 
 #### Issues
 
-Basic issue tracking per repository (creation, listing, and status updates).
+Basic issue tracking per repository (creation, listing and status updates).
 
-![Issues](docs/images/issues.png)
+![Issues](assets/images/Issues.png)
 
 ### CLI Tool
 
 The Node-based CLI (`cli/`) is built to support:
 
-- **File operations** in local repositories (create/write/append).
-- **Standard Git operations** for regular `.git` repositories using `simple-git`.
-- A clear boundary for GitStore repos:
-  - GitStore repos require the backend API; “git-style” operations in the CLI are currently not fully implemented for `.gitclone` repos.
+- **File operations** (create/write/append) in local repositories.
+- **Standard Git operations** for regular `.git`repositories 
+
 
 #### CLI Commands
 
-Help output (placeholder screenshot):
+![CLI help](assets/images/cli-help.png)
 
-![CLI help](docs/images/cli-help.png)
+![CLI push](assets/images/cli-push.png)
 
-Example push command output (placeholder screenshot):
+### Storage Engine
 
-![CLI push](docs/images/cli-push.png)
+The backend uses a custom append-only key–value storage engine written in Go.
 
-### Architecture & Engineering Focus
+- Used for repository metadata and per-repo state
+- Built to explore durability, crash recovery, and storage design tradeoffs
 
-This project is primarily an engineering sandbox to practice system design thinking:
+### API
 
-- **Go backend**: HTTP API + service layer (`gitClone/internal/transport/http`, `gitClone/internal/app`)
-- **Custom append-only KV store**: `gitDb/` with durability tests
-- **Repo storage**: per-repo store under `.gitclone/` and a global metadata store for repo registry
-- Clear separation of concerns (transport / app / storage)
+REST API (`/api/repos/*`) for repository operations: create, branches, commits, merge, files and issues.
 
 ### Disclaimer
 
@@ -95,7 +92,7 @@ This repository is built for **learning and exploration**.
 ### Known Limitations
 
 - **No backend authentication/authorization** (Firebase auth is frontend-only)
-- **Concurrency risks** in backend flows (documented in the production review)
+- **Concurrency risks** in backend flows
 - **No CI/CD ** currently in the repo
 - **Storage engine lacks compaction** (append-only log grows over time)
 
