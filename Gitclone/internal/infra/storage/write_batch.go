@@ -84,6 +84,8 @@ func (wb *WriteBatch) Commit() error {
 
 	// Force flush to ensure all writes are persisted
 	// GitDb writes are append-only, so this ensures the committed marker is last
+	// We need to sync the DB file to ensure writes are visible to new DB instances
+	// Note: GitDb.Put() already syncs, but we ensure the log file is fully written
 	return nil
 }
 

@@ -45,13 +45,17 @@ const RepoPage = () => {
   // Load commits for current branch when repo or branch changes
   useEffect(() => {
     if (repoId && repo?.currentBranch) {
+      const requestId = Date.now();
       setLoadingCommits(true);
+      console.log(`[RepoPage] requestId=${requestId}, Loading commits for branch: ${repo.currentBranch}`);
       api.getCommits(repoId, repo.currentBranch, 10)
         .then(loadedCommits => {
-          setCommits(loadedCommits);
+          console.log(`[RepoPage] requestId=${requestId}, Loaded ${loadedCommits.length} commits for ${repo.currentBranch}:`, 
+            loadedCommits.map(c => `${c.hash}: ${c.message}`));
+          setCommits(loadedCommits); // REPLACE commits (not append)
         })
         .catch(err => {
-          console.error('Failed to load commits:', err);
+          console.error(`[RepoPage] requestId=${requestId}, Failed to load commits:`, err);
           setCommits([]);
         })
         .finally(() => {

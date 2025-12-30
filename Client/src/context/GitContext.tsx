@@ -553,15 +553,34 @@ export function GitProvider({ children }: GitProviderProps) {
   };
 
   const mergeBranches = async (repoId: string, fromBranch: string, toBranch: string): Promise<MergeResult> => {
+    const requestId = Date.now();
     try {
+      console.log(`[GitContext] mergeBranches requestId=${requestId}: merging ${fromBranch} into ${toBranch} for repo ${repoId}`);
+      
       // First checkout to target branch
       await api.checkout(repoId, toBranch);
+      console.log(`[GitContext] mergeBranches requestId=${requestId}: checked out ${toBranch}`);
+      
       // Then merge fromBranch into toBranch
       const mergeResponse = await api.merge(repoId, fromBranch);
+      console.log(`[GitContext] mergeBranches requestId=${requestId}: merge completed, response:`, mergeResponse);
+      
+      // IMPORTANT: After merge, we need to push to update remote refs
+      // ListCommits reads from refs/remotes/origin/<branch>, so we must push
+      // to make the merge commit visible in the UI
+      try {
+        await api.push(repoId, 'origin', toBranch);
+        console.log(`[GitContext] mergeBranches requestId=${requestId}: pushed ${toBranch} after merge`);
+      } catch (pushErr) {
+        console.warn(`[GitContext] mergeBranches requestId=${requestId}: failed to push after merge:`, pushErr);
+        // Continue - merge succeeded even if push failed
+      }
       
       // Reload branches and repos after successful merge (branches might have changed)
       try {
         const branches = await api.getBranches(repoId);
+        console.log(`[GitContext] mergeBranches requestId=${requestId}: fetched ${branches.length} branches after merge`);
+        
         // Deduplicate branches by name
         const branchMap = new Map<string, { name: string; createdAt: Date }>();
         branches.forEach(b => {
@@ -577,6 +596,7 @@ export function GitProvider({ children }: GitProviderProps) {
         // Update repo with refreshed branches (REPLACE, not append)
         setRepositories(prev => prev.map(repo => {
           if (repo.id === repoId) {
+            console.log(`[GitContext] mergeBranches requestId=${requestId}: updating repo state, currentBranch=${toBranch}`);
             return {
               ...repo,
               branches: branchDates, // REPLACE with fetched branches
@@ -585,8 +605,12 @@ export function GitProvider({ children }: GitProviderProps) {
           }
           return repo;
         }));
+        
+        // Force commits refresh by triggering a state update that RepoPage will detect
+        // The RepoPage useEffect depends on repo?.currentBranch, so updating currentBranch should trigger refresh
+        console.log(`[GitContext] mergeBranches requestId=${requestId}: repo state updated, RepoPage should refresh commits for ${toBranch}`);
       } catch (reloadErr) {
-        console.warn('GitContext: Failed to reload branches after merge, reloading all repos:', reloadErr);
+        console.warn(`[GitContext] mergeBranches requestId=${requestId}: Failed to reload branches after merge:`, reloadErr);
         await loadRepositories();
       }
       
@@ -599,6 +623,7 @@ export function GitProvider({ children }: GitProviderProps) {
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Merge failed';
+      console.error(`[GitContext] mergeBranches requestId=${requestId}: error:`, err);
       
       // Check if it's a non-fast-forward error (409 conflict)
       if (errorMessage.includes('Non-fast-forward') || errorMessage.includes('409')) {
