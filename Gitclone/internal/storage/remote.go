@@ -84,3 +84,4 @@ func IsCommitPushed(root string, options InitOptions, branch string, commitID in
 
 	return false, nil
 }
+
