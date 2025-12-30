@@ -55,21 +55,27 @@ func (db *DB) rebuildIndex() error {
 // matches the file by writing it (which should be identical if no errors occurred).
 // This also ensures any buffered writes are flushed.
 func (db *DB) Close() error {
+	// IMPORTANT: Close must never rewrite/truncate the on-disk log.
+	// Rewriting from an in-memory snapshot is unsafe if multiple DB handles exist:
+	// a stale handle could drop records appended by a newer handle.
+	// Since Put() already appends to the log file and syncs, Close() only needs to flush.
+	return db.Flush()
+}
+
+// Flush ensures any previously written log data is persisted to disk.
+// It MUST NOT rewrite/truncate the log file.
+func (db *DB) Flush() error {
 	if err := os.MkdirAll(filepath.Dir(db.logPath), 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
-	// Write in-memory log to file
-	// Since Put() already appends to file, this should write the same data
-	// but ensures consistency and flushes any buffered writes
-	if err := os.WriteFile(db.logPath, db.log, 0644); err != nil {
-		return fmt.Errorf("failed to write log file: %w", err)
+	// Sync the file if it exists (or create it empty if this DB was never written to).
+	file, err := os.OpenFile(db.logPath, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for flush: %w", err)
 	}
-	// Sync to ensure writes are persisted to disk
-	// This is important for crash-safety
-	file, err := os.OpenFile(db.logPath, os.O_RDWR, 0644)
-	if err == nil {
-		file.Sync()
-		file.Close()
+	defer file.Close()
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync log file: %w", err)
 	}
 	return nil
 }

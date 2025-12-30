@@ -59,14 +59,28 @@ func (s *Service) ListCommits(repoID, branchName string, limit int) ([]Commit, e
 
 	// Read from remote ref (refs/remotes/origin/<branch>) - this is the pushed state
 	// If branch hasn't been pushed yet, return empty list
+	log.Printf("DEBUG ListCommits: repoID=%s, branchName=%s, targetBranch=%s", repoID, branchName, targetBranch)
+	
+	// Debug: check both local and remote refs
+	headTip, _ := repostorage.ReadHeadRefMaybeFromStore(repoStore, targetBranch)
+	if headTip != nil {
+		log.Printf("DEBUG ListCommits: refs/heads/%s = %d", targetBranch, *headTip)
+	} else {
+		log.Printf("DEBUG ListCommits: refs/heads/%s = (empty)", targetBranch)
+	}
+	
 	tipPtr, err := repostorage.ReadRemoteRefFromStore(repoStore, targetBranch)
 	if err != nil {
+		log.Printf("DEBUG ListCommits: error reading remote ref: %v", err)
 		return []Commit{}, err
 	}
 	if tipPtr == nil {
 		// Branch hasn't been pushed yet - no commits to show
+		log.Printf("DEBUG ListCommits: refs/remotes/origin/%s = (empty) - returning empty commits list", targetBranch)
 		return []Commit{}, nil
 	}
+	
+	log.Printf("DEBUG ListCommits: refs/remotes/origin/%s = %d - will walk from this commit", targetBranch, *tipPtr)
 
 	// Walk commit history from remote ref tip
 	var commits []Commit
@@ -262,24 +276,33 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 		}
 	}
 
+	log.Printf("DEBUG PushCommits: repoID=%s, branch=%s", repoID, branch)
+
 	// Get current branch tip (refs/heads/<branch>)
 	headTipPtr, err := repostorage.ReadHeadRefMaybeFromStore(repoStore, branch)
 	if err != nil || headTipPtr == nil {
 		return 0, fmt.Errorf("no commits to push")
 	}
+	headTip := *headTipPtr
+	log.Printf("DEBUG PushCommits: refs/heads/%s = %d", branch, headTip)
 
 	// Get current remote ref (refs/remotes/origin/<branch>)
 	remoteTipPtr, err := repostorage.ReadRemoteRefFromStore(repoStore, branch)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get remote ref: %w", err)
 	}
+	if remoteTipPtr != nil {
+		log.Printf("DEBUG PushCommits: refs/remotes/origin/%s = %d", branch, *remoteTipPtr)
+	} else {
+		log.Printf("DEBUG PushCommits: refs/remotes/origin/%s = (empty)", branch)
+	}
 
 	// If remote ref doesn't exist or is behind, push all commits from head to remote
 	// Push sets: refs/remotes/origin/<branch> = refs/heads/<branch>
-	headTip := *headTipPtr
 
 	// Check if already up to date
 	if remoteTipPtr != nil && *remoteTipPtr == headTip {
+		log.Printf("DEBUG PushCommits: already up to date, no push needed")
 		return 0, nil // Already up to date
 	}
 
@@ -318,6 +341,7 @@ func (s *Service) PushCommits(repoID, branch string) (int, error) {
 	if err := batch.Commit(); err != nil {
 		return 0, fmt.Errorf("failed to commit push: %w", err)
 	}
+	log.Printf("DEBUG PushCommits: pushed %d commits, updated refs/remotes/origin/%s to %d", len(commitsToPush), branch, headTip)
 
 	// Update metadata commit count (using global store for repo registry)
 	meta, err := s.metaStore.GetRepo(repoID)
