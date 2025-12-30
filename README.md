@@ -1,8 +1,7 @@
 ## GitStore
 
 GitStore is a Git-inspired project built to explore repository modeling and backend architecture.
-It consists of a Go backend with a custom append-only key–value store, a React (Vite) frontend,
-and a Node.js CLI.
+It consists of a Go backend with a custom append-only key–value store, a React (Vite) frontend and a Node.js CLI.
 
 ### High-level Overview
 
@@ -16,7 +15,7 @@ GitStore lets you:
 
 ### UI & User Experience
 
-The web client is intentionally designed to feel “product-grade” (layout, navigation, empty-states, and clear flows), even though the backend is learning-focused.
+The web client is designed with a clear layout and predictable navigation, with an emphasis on usability
 
 #### Landing Page
 
@@ -34,7 +33,8 @@ The client uses **Firebase Authentication**
 
 ### Dashboard
 
-The dashboard is the primary workspace: it lists repositories and provides navigation into repo features (branches, commits/merge, issues, CLI-like interactions).
+The dashboard serves as the main workspace, listing repositories and providing navigation to repository features such as branches, commits, merges and issues.
+
 
 ![Dashboard](docs/images/dashboard.png)
 
@@ -42,9 +42,10 @@ The dashboard is the primary workspace: it lists repositories and provides navig
 
 #### Create Repository
 
-Create repositories directly from the UI; repositories persist on the server via a metadata registry.
+Repositories can be created directly from the UI and are persisted on the server via a metadata registry.
 
-#### Commits & Pu
+
+#### Commits & Push
 
 GitStore models a “local vs pushed” distinction:
 
