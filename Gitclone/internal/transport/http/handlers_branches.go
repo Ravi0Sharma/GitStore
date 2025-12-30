@@ -18,7 +18,7 @@ func (s *Server) handleRepoBranches(w http.ResponseWriter, r *http.Request, repo
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoBranches - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoBranches: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -60,7 +60,7 @@ func (s *Server) handleRepoCheckout(w http.ResponseWriter, r *http.Request, repo
 	// Validate repo exists
 	_, err := repos.ResolveRepoPath(s.repoBase, repoID)
 	if err != nil {
-		log.Printf("DEBUG: handleRepoCheckout - repoID=%s, error=%v", repoID, err)
+		log.Printf("handleRepoCheckout: repoID=%s resolve repo path: %v", repoID, err)
 		RespondJSON(w, http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}
