@@ -30,6 +30,17 @@ func Commit(args []string) {
 
 	options := storage.InitOptions{Bare: false}
 
+	// Check if there are staged entries
+	hasStaged, err := storage.HasStagedEntries(cwd, options)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	if !hasStaged {
+		fmt.Println("Nothing to commit. Stage changes first with 'git add <path>' or 'gitclone add <path>'")
+		return
+	}
+
 	branch, err := storage.ReadHEADBranch(cwd, options)
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -50,7 +61,15 @@ func Commit(args []string) {
 		return
 	}
 
+	// Build tree from index (use commit ID as tree ID for simplicity)
+	if err := storage.BuildTreeFromIndex(cwd, options, id); err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
 	// Create commit object
+	// Note: In a full implementation, commit would reference the tree ID
+	// For now, we use the commit ID as the tree ID
 	commit := storage.Commit{
 		ID:        id,
 		Message:   msg,
@@ -69,6 +88,11 @@ func Commit(args []string) {
 	if err := storage.WriteHeadRef(cwd, options, branch, id); err != nil {
 		fmt.Println("Error:", err)
 		return
+	}
+
+	// Clear index after successful commit
+	if err := storage.ClearIndex(cwd, options); err != nil {
+		fmt.Printf("Warning: failed to clear index: %v\n", err)
 	}
 
 	fmt.Printf("[%s %d] %s\n", branch, id, msg)

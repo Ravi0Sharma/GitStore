@@ -10,6 +10,7 @@ import IssuesPage from "./pages/IssuesPage"
 import IssueDetailPage from "./pages/IssueDetailPage"
 import BranchPage from "./pages/BranchPage"
 import MergePage from "./pages/MergePage"
+import CLIPage from "./pages/CLIPage"
 import NotFound from "./pages/NotFound"
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/dashboard/repo/:repoId/issues/:issueId" element={<IssueDetailPage />} />
           <Route path="/dashboard/repo/:repoId/branches" element={<BranchPage />} />
           <Route path="/dashboard/repo/:repoId/merge" element={<MergePage />} />
+          <Route path="/dashboard/repo/:repoId/cli" element={<CLIPage />} />
         </Route>
         
         {/* Catch all */}

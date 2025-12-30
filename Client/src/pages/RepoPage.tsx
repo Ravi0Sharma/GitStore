@@ -9,10 +9,12 @@ import {
   Code, 
   Clock,
   ArrowLeft,
-  CircleDot
+  CircleDot,
+  Terminal
 } from 'lucide-react';
 import { safeDistanceToNow } from '../utils/dateHelpers';
 import { routes } from '../routes';
+import { api, Commit } from '../lib/api';
 
 
 const RepoPage = () => {
@@ -20,6 +22,8 @@ const RepoPage = () => {
   const { getRepository, switchBranch, loadRepositories, loading } = useGit();
   const navigate = useNavigate();
   const [isRefetching, setIsRefetching] = useState(false);
+  const [commits, setCommits] = useState<Commit[]>([]);
+  const [loadingCommits, setLoadingCommits] = useState(false);
   
   // Redirect if no repoId
   useEffect(() => {
@@ -37,6 +41,28 @@ const RepoPage = () => {
   }, [repoId, loading, isRefetching]);
 
   const repo = getRepository(repoId || '');
+
+  // Load commits for current branch when repo or branch changes
+  useEffect(() => {
+    if (repoId && repo?.currentBranch) {
+      const requestId = Date.now();
+      setLoadingCommits(true);
+      console.log(`[RepoPage] requestId=${requestId}, Loading commits for branch: ${repo.currentBranch}`);
+      api.getCommits(repoId, repo.currentBranch, 10)
+        .then(loadedCommits => {
+          console.log(`[RepoPage] requestId=${requestId}, Loaded ${loadedCommits.length} commits for ${repo.currentBranch}:`, 
+            loadedCommits.map(c => `${c.hash}: ${c.message}`));
+          setCommits(loadedCommits); // REPLACE commits (not append)
+        })
+        .catch(err => {
+          console.error(`[RepoPage] requestId=${requestId}, Failed to load commits:`, err);
+          setCommits([]);
+        })
+        .finally(() => {
+          setLoadingCommits(false);
+        });
+    }
+  }, [repoId, repo?.currentBranch]);
 
   if (!repoId) {
     return null; // Will redirect
@@ -65,7 +91,8 @@ const RepoPage = () => {
     );
   }
 
-  const latestCommit = repo.commits && repo.commits.length > 0 ? repo.commits[repo.commits.length - 1] : null;
+  // Get the latest commit from loaded commits (already sorted by backend, first is latest)
+  const latestCommit = commits && commits.length > 0 ? commits[0] : null;
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -78,10 +105,19 @@ const RepoPage = () => {
         </button>
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-            <BookMarked className="h-6 w-6 text-muted-foreground" />
-            {repo.name}
-          </h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              <BookMarked className="h-6 w-6 text-muted-foreground" />
+              {repo.name}
+            </h1>
+            <Link
+              to={routes.dashboardRepoCLI(repo.id)}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors font-medium"
+            >
+              <Terminal className="h-4 w-4" />
+              Enter CLI
+            </Link>
+          </div>
           {repo.description && (
             <p className="text-muted-foreground mt-2">{repo.description}</p>
           )}
@@ -134,13 +170,28 @@ const RepoPage = () => {
           </div>
           
           <div className="divide-y divide-border">
-            {repo.branches.map((branch) => (
+            {repo.branches.map((branch, index) => (
               <div
-                key={branch.name}
+                key={`${repo.id}-${branch.name}-${index}`}
                 className={`p-4 flex items-center justify-between hover:bg-secondary/60 transition-colors cursor-pointer ${
                   branch.name === repo.currentBranch ? 'bg-secondary/70' : ''
                 }`}
-                onClick={() => switchBranch(repo.id, branch.name)}
+                onClick={async () => {
+                  await switchBranch(repo.id, branch.name);
+                  // Always reload commits when clicking a branch (even if same branch)
+                  // This ensures we show the latest commits for that branch
+                  setLoadingCommits(true);
+                  try {
+                    const loadedCommits = await api.getCommits(repo.id, branch.name, 10);
+                    setCommits(loadedCommits);
+                  } catch (err) {
+                    console.error('Failed to reload commits:', err);
+                    setCommits([]);
+                  } finally {
+                    setLoadingCommits(false);
+                  }
+                  // Commits will also be reloaded via useEffect when currentBranch changes
+                }}
               >
                 <div className="flex items-center gap-3">
                   <GitBranch className={`h-4 w-4 ${branch.name === repo.currentBranch ? 'text-success' : 'text-muted-foreground'}`} />
@@ -169,24 +220,45 @@ const RepoPage = () => {
             </h2>
           </div>
           <div className="p-4">
-            {latestCommit ? (
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                  <Code className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-foreground font-medium">{latestCommit.message}</p>
-                  <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
-                    <span className="font-mono text-primary">{latestCommit.hash}</span>
-                    <span>•</span>
-                    <span>{latestCommit.author}</span>
-                    <span>•</span>
-                    <span>{safeDistanceToNow(latestCommit.date)}</span>
+            {loadingCommits ? (
+              <p className="text-muted-foreground">Loading commits...</p>
+            ) : latestCommit ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
+                    <Code className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-foreground font-medium">{latestCommit.message}</p>
+                    <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+                      <span className="font-mono text-primary">{latestCommit.hash}</span>
+                      <span>•</span>
+                      <span>{latestCommit.author}</span>
+                      <span>•</span>
+                      <span>{safeDistanceToNow(latestCommit.date)}</span>
+                    </div>
                   </div>
                 </div>
+                {commits.length > 1 && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground mb-2">Recent commits:</p>
+                    <div className="space-y-2">
+                      {commits.slice(1, 6).map((commit) => (
+                        <div key={commit.hash} className="flex items-start gap-3 text-sm">
+                          <span className="font-mono text-primary text-xs">{commit.hash.substring(0, 7)}</span>
+                          <span className="text-foreground flex-1">{commit.message}</span>
+                          <span className="text-muted-foreground text-xs">{safeDistanceToNow(commit.date)}</span>
+                        </div>
+                      ))}
+                      {commits.length > 6 && (
+                        <p className="text-xs text-muted-foreground">... and {commits.length - 6} more commits</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <p className="text-muted-foreground">No commits yet</p>
+              <p className="text-muted-foreground">No pushed commits yet</p>
             )}
           </div>
         </div>

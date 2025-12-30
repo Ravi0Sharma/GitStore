@@ -1,0 +1,1 @@
+{"version":3,"file":"git-whitelist.d.ts","sourceRoot":"","sources":["../../src/utils/git-whitelist.ts"],"names":[],"mappings":"AAAA;;GAEG;AACH,eAAO,MAAM,oBAAoB,8HAcvB,CAAC;AAEX,MAAM,MAAM,iBAAiB,GAAG,OAAO,oBAAoB,CAAC,MAAM,CAAC,CAAC;AAEpE;;GAEG;AACH,wBAAgB,mBAAmB,CAAC,OAAO,EAAE,MAAM,GAAG,OAAO,IAAI,iBAAiB,CAEjF;AAED;;GAEG;AACH,wBAAgB,qBAAqB,IAAI,MAAM,EAAE,CAEhD"}
