@@ -1,0 +1,26 @@
+# Build output
+dist/
+.vite/
+
+# Dependencies
+node_modules/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (use .env.example)
+.env
+.env.local
+.env.*.local
+
