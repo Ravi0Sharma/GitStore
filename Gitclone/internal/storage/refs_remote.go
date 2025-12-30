@@ -52,3 +52,4 @@ func ReadRemoteRefMaybe(root string, options InitOptions, branch string) (*int, 
 	return ReadRemoteRef(root, options, branch)
 }
 
+
