@@ -87,60 +87,26 @@ REST API (`/api/repos/*`) for repository operations: create, branches, commits, 
 
 ### Docker
 
-The project includes production-ready Docker support for running the full stack with a single command.
-
-#### Quick Start
+Run the full system using Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-This starts:
-- **Backend server** on `http://localhost:8080`
-- **Frontend client** on `http://localhost:80` (or `http://localhost`)
+**Backend API:** http://localhost:8080
 
-#### Configuration
+**Frontend UI:** http://localhost
 
-**Environment Variables:**
-- `PORT` (default: `8080`) - Backend server port
-- `GITSTORE_REPO_BASE` (default: `/data/repos`) - Repository storage path
-- `GITSTORE_DB_PATH` (default: `/data/db`) - Metadata database path
+Data is persisted using Docker volumes:
 
-**Ports:**
-- `8080` - Backend API
-- `80` - Frontend web interface
+- **Repositories:** `/data/repos`
+- **Metadata DB:** `/data/db`
 
-**Data Persistence:**
-- Repository data: stored in Docker volume `gitstore-repos` (mounted at `/data/repos`)
-- Metadata database: stored in Docker volume `gitstore-db` (mounted at `/data/db`)
+To reset all data:
 
-#### Managing Data
-
-**View volumes:**
-```bash
-docker volume ls | grep gitstore
-```
-
-**Reset all data:**
 ```bash
 docker compose down -v
 ```
-
-**Backup data:**
-```bash
-docker run --rm -v gitstore-repos:/data -v $(pwd):/backup alpine tar czf /backup/repos-backup.tar.gz -C /data .
-docker run --rm -v gitstore-db:/data -v $(pwd):/backup alpine tar czf /backup/db-backup.tar.gz -C /data .
-```
-
-**Restore data:**
-```bash
-docker run --rm -v gitstore-repos:/data -v $(pwd):/backup alpine tar xzf /backup/repos-backup.tar.gz -C /data
-docker run --rm -v gitstore-db:/data -v $(pwd):/backup alpine tar xzf /backup/db-backup.tar.gz -C /data
-```
-
-#### Development
-
-For development with hot-reload, see `docker-compose.override.yml.example` for configuration options.
 
 ### Disclaimer
 
