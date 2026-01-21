@@ -1,5 +1,7 @@
 # Environment variables
 .env
+.env.Store
+env.store
 
 # Dependencies
 node_modules
