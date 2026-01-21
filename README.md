@@ -1,3 +1,8 @@
+### Disclaimer
+
+This repository is built for **learning and exploration**.
+
+
 ## GitStore
 
 GitStore is a lightweight version control system inspired by Git, implementing core features such as commits, branching and merging. It includes a command-line interface and a custom-built embedded database designed specifically for managing version control metadata and history.
@@ -109,15 +114,10 @@ To reset all data:
 docker compose down -v
 ```
 
-### Disclaimer
-
-This repository is built for **learning and exploration**.
-
 ### Known Limitations
 
 - **No backend authentication/authorization** (Firebase auth is frontend-only)
 - **Concurrency risks** in backend flows
-- **No CI/CD** currently in the repo
 - **Storage engine lacks compaction** (append-only log grows over time)
 
 
