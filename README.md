@@ -5,7 +5,7 @@ This repository is built for **learning and exploration**.
 
 ## GitStore
 
-GitStore is a lightweight version control system inspired by Git, implementing core features such as commits, branching and merging. It includes a command-line interface and a custom-built embedded database designed specifically for managing version control metadata and history.
+GitStore is a lightweight version control system inspired by Git, with core features such as commits, branching and merging.Plus a command-line interface and a custom-built embedded database for managing version control metadata and history.
 
 
 
@@ -13,24 +13,18 @@ GitStore is a lightweight version control system inspired by Git, implementing c
 
 GitStore lets you:
 
-- **Create repositories** from the web UI and persist them via the Go server
+- **Create repositories** 
 - **Stage files, commit, create branches, and merge** using Git-like flows
 - **Push** to update “remote refs” so commits become visible in the UI
 - **Track simple issues** per repository
 - Use a **Node CLI** for local file operations and standard Git operations
 
-### UI & User Experience
-
-The web client is designed with a clear layout and predictable navigation, with an emphasis on usability
-
 ### Dashboard
 
 The dashboard serves as the main workspace, listing repositories and providing navigation to repository features such as branches, commits, merges and issues.
 
-
 ![Dashboard](assets/images/dashboard.png)
 
-### Repository Features
 
 #### Create Repository
 
