@@ -4,13 +4,11 @@ GitStore is a lightweight version control system inspired by Git, with core feat
 
 ### High-level Overview
 
-GitStore lets you:
-
 - **Create repositories** 
 - **Stage files, commit, create branches, and merge** using Git-like flows
 - **Push** to update “remote refs” so commits become visible in the UI
 - **Track simple issues** per repository
-- Use a **Node CLI** for local file operations and standard Git operations
+- Use a **CLI** for local file operations and standard Git operations
 
 ### Dashboard
 
