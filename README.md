@@ -23,20 +23,6 @@ GitStore lets you:
 
 The web client is designed with a clear layout and predictable navigation, with an emphasis on usability
 
-#### Landing Page
-
-Clean landing experience with onboarding-oriented sections and a consistent design system.
-
-![Landing Page](assets/images/landingPage-1.png)
-![Landing Page](assets/images/landingPage-2.png)
-
-### Authentication (Firebase)
-
-The client uses **Firebase Authentication** 
-
-- **Email & password** 
-- **Google sign-in** 
-
 ### Dashboard
 
 The dashboard serves as the main workspace, listing repositories and providing navigation to repository features such as branches, commits, merges and issues.
