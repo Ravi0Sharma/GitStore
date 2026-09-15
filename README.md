@@ -70,10 +70,6 @@ Run the full system using Docker Compose:
 docker compose up --build
 ```
 
-**Backend API:** http://localhost:8080
-
-**Frontend UI:** http://localhost
-
 Data is persisted using Docker volumes:
 
 - **Repositories:** `/data/repos`
